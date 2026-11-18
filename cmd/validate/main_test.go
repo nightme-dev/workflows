@@ -263,6 +263,61 @@ jobs:
 	}
 }
 
+func TestUseNamesAnArgument(t *testing.T) {
+	tr := newTree(t)
+	tr.bundle("alice", "fix", `title: a workflow
+args:
+  - name: which
+    default: notify
+jobs:
+  main:
+    steps:
+      - id: one
+        use: ${{ args.which }}
+`)
+	tr.readme("alice/fix")
+	if diags := tr.validate(); len(diags) != 0 {
+		t.Errorf("an action named by an argument is a valid action:\n%s", report(diags))
+	}
+}
+
+func TestUseNamesAnArgumentBoundToABundledAction(t *testing.T) {
+	tr := newTree(t)
+	tr.bundle("alice", "fix", `title: a workflow
+args:
+  - name: which
+    default: alice-fix-report
+jobs:
+  main:
+    steps:
+      - id: one
+        use: ${{ args.which }}
+`)
+	tr.writeScript("workflows/alice/fix/actions/alice-fix-report.sh")
+	tr.readme("alice/fix")
+	if diags := tr.validate(); len(diags) != 0 {
+		t.Errorf("an action named by an argument is a valid action:\n%s", report(diags))
+	}
+}
+
+func TestUseNamesAnExpressionThatStays(t *testing.T) {
+	tr := newTree(t)
+	tr.bundle("alice", "fix", `title: a workflow
+jobs:
+  main:
+    steps:
+      - id: one
+        use: ${{ steps.other.outputs.action }}
+`)
+	tr.writeScript("workflows/alice/fix/actions/alice-fix-report.sh")
+	tr.readme("alice/fix")
+	diags := tr.validate()
+	// The action is chosen at run time: the validator cannot say
+	// which one it is, so it says nothing about the wiring.
+	wantNoProblem(t, diags, "is used by no step")
+	wantNoProblem(t, diags, "which is neither a built-in action")
+}
+
 func TestUnreferencedAction(t *testing.T) {
 	tr := newTree(t)
 	tr.bundle("alice", "fix", validWorkflow)
@@ -323,6 +378,52 @@ func TestCatalogEntryThatIsNotAnAddress(t *testing.T) {
 	tr.bundle("alice", "fix", validWorkflow)
 	tr.write("README.md", "# workflows\n\n## Workflows\n\n| `Alice/Fix` |\n")
 	wantProblem(t, tr.validate(), `the catalog entry "Alice/Fix" is not a valid address`)
+}
+
+func TestCatalogReadsTheAddressColumnOnly(t *testing.T) {
+	tr := newTree(t)
+	tr.bundle("alice", "fix", validWorkflow)
+	tr.write("README.md", "# workflows\n\n## Workflows\n\n"+
+		"| Address | What it does |\n|---|---|\n"+
+		"| `alice/fix` | reads `docs/setup` |\n")
+	if diags := tr.validate(); len(diags) != 0 {
+		t.Errorf("the prose of a row is not an entry of the catalog:\n%s", report(diags))
+	}
+}
+
+func TestMalformedNameIsNotComparedWithTheCatalog(t *testing.T) {
+	tr := newTree(t)
+	tr.bundle("alice", "Fix", validWorkflow)
+	tr.readme("alice/fix")
+	diags := tr.validate()
+	wantProblem(t, diags, `the name "Fix" is not lowercase kebab-case`)
+	// The name is the problem: the catalog is not blamed for it.
+	wantNoProblem(t, diags, "which no workflow has")
+	wantNoProblem(t, diags, "is not listed in the README catalog")
+}
+
+func TestStrayWorkflowFileDoesNotHideTheTree(t *testing.T) {
+	tr := newTree(t)
+	tr.bundle("alice", "fix", validWorkflow)
+	tr.write("workflows/workflow.yml", validWorkflow)
+	tr.readme("alice/fix")
+	diags := tr.validate()
+	wantProblem(t, diags, "a workflow lives in a bundle directory")
+	// The tree is still checked: a bundle that does not validate is
+	// still reported.
+	tr.bundle("bob", "fix", "jobs: {}\n")
+	tr.readme("alice/fix", "bob/fix")
+	wantProblem(t, tr.validate(), "jobs is required")
+}
+
+func TestUnparseableWorkflowFileDoesNotReportUnusedActions(t *testing.T) {
+	tr := newTree(t)
+	tr.bundle("alice", "fix", "title: t\njobs:\n  m:\n   steps:\n  bad\n")
+	tr.writeScript("workflows/alice/fix/actions/alice-fix-report.sh")
+	tr.readme("alice/fix")
+	diags := tr.validate()
+	wantProblem(t, diags, "could not find expected")
+	wantNoProblem(t, diags, "is used by no step")
 }
 
 func TestExitCodes(t *testing.T) {
