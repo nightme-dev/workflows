@@ -31,22 +31,11 @@ workflows/
 
 The repository uses the `.yml` extension only.
 
-## Workflows
-
-| Address | What it does |
-|---|---|
-| `nightme/coder` | Pick an open issue from the nightme/assigned queue, fix it in a worktree, review the change, and open a pull request. |
-
-The catalog above is written by hand and checked against the tree by the
-validator: a workflow that is not listed here is reported, and so is an entry
-that names no workflow.
-
 ## Validating a workflow
 
 The validator is the machine half of the community process. It checks the
 objective facts — the file parses, it is a workflow, the names are shaped
-right, every action is wired, the catalog agrees with the tree — and leaves
-the judgment to the reviewer.
+right, every action is wired — and leaves the judgment to the reviewer.
 
 ```sh
 go run ./cmd/validate ./workflows
@@ -68,9 +57,28 @@ Point it at one bundle to check one workflow and the actions it ships:
 go run ./cmd/validate ./workflows/nightme/coder
 ```
 
-The rules that need the whole tree — the shape of the names, the uniqueness of
-the identity, the catalog — need the whole tree: they are checked when the
-validator is pointed at the workflows directory.
+The rules that need the whole tree — the uniqueness of the identity, the
+files that sit outside a bundle — need the whole tree: they are checked
+when the validator is pointed at the workflows directory.
+
+### The changed bundles
+
+The validator has a second mode: it checks only the bundles it is given. The
+values are paths under the workflows directory, and the flag may be given
+more than once:
+
+```sh
+go run ./cmd/validate --changed nightme/coder ./workflows
+go run ./cmd/validate --changed alice/fix,bob/build ./workflows
+```
+
+In this mode nothing but the named bundles is read, and the rules that need
+the whole tree are not applied: a bundle stands on its own. The shape of the
+namespace and the name is checked, the bundle is checked on its own terms,
+and a workflow nobody touched cannot fail the run.
+
+CI uses this mode: a pull request is judged on what it changed, so only the
+bundles it changed are validated.
 
 The rules a workflow has to follow, the process a pull request goes through,
 and the questions a reviewer answers are in [CONTRIBUTING.md](CONTRIBUTING.md).
