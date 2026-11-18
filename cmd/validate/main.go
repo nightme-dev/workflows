@@ -87,10 +87,18 @@ func validate(root string) ([]wfe.Diagnostic, error) {
 		return nil, err
 	}
 	// The repository uses the .yml extension only.
-	diags = append(diags, checkExtensions(root)...)
+	extensions, err := checkExtensions(root)
+	if err != nil {
+		return nil, err
+	}
+	diags = append(diags, extensions...)
 	// The shape of every bundle, and the wiring of its actions.
 	for _, b := range bundles {
-		diags = append(diags, checkBundle(b)...)
+		bundleDiags, err := checkBundle(b)
+		if err != nil {
+			return nil, err
+		}
+		diags = append(diags, bundleDiags...)
 	}
 	// The shape of the names.
 	diags = append(diags, checkNames(bundles)...)

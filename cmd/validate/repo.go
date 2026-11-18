@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -38,6 +39,10 @@ var (
 //
 // A `use:` step may name one of them. Every other name must be a
 // bundled action of the same bundle.
+//
+// The list is the one of nightme's runtime: internal/me/action.go
+// registers them (registerBuiltinActions). It cannot be imported from
+// here — the package is internal — so it is kept in step by hand.
 var builtinActions = map[string]bool{
 	"notify":            true,
 	"email":             true,
@@ -90,15 +95,18 @@ func clean(path string) string {
 // bundle — that is the "the bundle holds no workflow.yml" problem,
 // and the checks that follow report it.
 //
-// A root that holds a workflow.yml itself is a single bundle: the
-// validator then checks that one workflow and its attachments, and
-// leaves the rules that need the whole tree alone.
+// A root that holds a workflow.yml and no namespace directory is a
+// single bundle: the validator then checks that one workflow and its
+// attachments, and leaves the rules that need the whole tree alone.
+// A root that holds both a workflow.yml and a namespace directory is
+// the workflows directory — the workflow.yml is a stray file, and it
+// is reported as one.
 func discover(root string) ([]bundle, []wfe.Diagnostic, error) {
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		return nil, nil, err
 	}
-	if holdsWorkflowFile(entries) {
+	if holdsWorkflowFile(entries) && !holdsNamespaceDir(root, entries) {
 		return []bundle{{dir: root}}, nil, nil
 	}
 	var bundles []bundle
@@ -141,6 +149,30 @@ func holdsWorkflowFile(entries []os.DirEntry) bool {
 	return false
 }
 
+// holdsNamespaceDir reports whether the entries hold a namespace
+// directory: a directory that holds a directory of its own, which is
+// where a bundle lives.
+//
+// A directory that cannot be read counts: the walk that follows
+// reports it.
+func holdsNamespaceDir(root string, entries []os.DirEntry) bool {
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		sub, err := os.ReadDir(filepath.Join(root, e.Name()))
+		if err != nil {
+			return true
+		}
+		for _, s := range sub {
+			if s.IsDir() {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // bundleLayout is the path of the workflow file of a bundle, as the
 // rules write it.
 func bundleLayout() string {
@@ -156,7 +188,10 @@ func bundleDirLayout() string {
 //
 // The repository uses the .yml extension only: .yaml is a second
 // spelling of the same thing, and the two spellings drift apart.
-func checkExtensions(root string) []wfe.Diagnostic {
+//
+// The error it returns is not a problem of a workflow: it says a path
+// could not be read, and the caller turns it into the exit code 9.
+func checkExtensions(root string) ([]wfe.Diagnostic, error) {
 	var diags []wfe.Diagnostic
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -170,9 +205,9 @@ func checkExtensions(root string) []wfe.Diagnostic {
 		return nil
 	})
 	if err != nil {
-		return []wfe.Diagnostic{{Path: root, Message: err.Error()}}
+		return nil, err
 	}
-	return diags
+	return diags, nil
 }
 
 // checkNames reports the names that are not shaped right.
@@ -231,7 +266,11 @@ func checkIdentities(bundles []bundle) []wfe.Diagnostic {
 func checkActionNames(bundles []bundle) []wfe.Diagnostic {
 	groups := map[string][]string{}
 	for _, b := range bundles {
-		for name, path := range bundledActions(b.dir) {
+		entries, err := os.ReadDir(filepath.Join(b.dir, actionsDir))
+		if err != nil {
+			continue
+		}
+		for name, path := range bundledActions(b.dir, entries) {
 			groups[name] = append(groups[name], path)
 		}
 	}
@@ -250,11 +289,14 @@ func checkActionNames(bundles []bundle) []wfe.Diagnostic {
 
 // checkBundle checks the conventions of one bundle: the workflow file
 // it holds and the actions it ships.
-func checkBundle(b bundle) []wfe.Diagnostic {
+//
+// The error it returns is not a problem of a workflow: it says a path
+// could not be read, and the caller turns it into the exit code 9.
+func checkBundle(b bundle) ([]wfe.Diagnostic, error) {
 	var diags []wfe.Diagnostic
 	entries, err := os.ReadDir(b.dir)
 	if err != nil {
-		return []wfe.Diagnostic{{Path: b.dir, Message: err.Error()}}
+		return nil, err
 	}
 	// The bundle holds exactly one workflow file, and it is named
 	// workflow.yml.
@@ -282,8 +324,12 @@ func checkBundle(b bundle) []wfe.Diagnostic {
 	}
 	// The bundled actions: every file of the actions directory is a
 	// script, and every script is executable.
-	actions := bundledActions(b.dir)
-	for _, e := range actionEntries(b.dir) {
+	actionEntries, err := os.ReadDir(filepath.Join(b.dir, actionsDir))
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, err
+	}
+	actions := bundledActions(b.dir, actionEntries)
+	for _, e := range actionEntries {
 		path := filepath.Join(b.dir, actionsDir, e.Name())
 		if e.IsDir() || filepath.Ext(e.Name()) != scriptExt {
 			diags = append(diags, problem(path, 0, 0,
@@ -292,8 +338,7 @@ func checkBundle(b bundle) []wfe.Diagnostic {
 		}
 		info, err := e.Info()
 		if err != nil {
-			diags = append(diags, problem(path, 0, 0, "%s", err))
-			continue
+			return nil, err
 		}
 		if info.Mode()&0o111 == 0 {
 			diags = append(diags, problem(path, 0, 0,
@@ -304,9 +349,9 @@ func checkBundle(b bundle) []wfe.Diagnostic {
 	// action of this bundle, and every bundled action is used. A
 	// bundle without a workflow file has no steps to wire.
 	if hasWorkflow {
-		refs, err := usedActions(workflowPath)
+		refs, complete, err := usedActions(workflowPath)
 		if err != nil {
-			return append(diags, wfe.Diagnostic{Path: workflowPath, Message: err.Error()})
+			return nil, err
 		}
 		used := map[string]bool{}
 		for _, ref := range refs {
@@ -320,25 +365,19 @@ func checkBundle(b bundle) []wfe.Diagnostic {
 					ref.name))
 			}
 		}
-		for name, path := range actions {
-			if used[name] {
-				continue
+		// A bundled action is used by no step only when the steps
+		// that could use it are known.
+		if complete {
+			for name, path := range actions {
+				if used[name] {
+					continue
+				}
+				diags = append(diags, problem(path, 0, 0,
+					"the bundled action %q is used by no step", name))
 			}
-			diags = append(diags, problem(path, 0, 0,
-				"the bundled action %q is used by no step", name))
 		}
 	}
-	return diags
-}
-
-// actionEntries returns the entries of the actions directory of a
-// bundle. A bundle that ships no actions has none.
-func actionEntries(dir string) []os.DirEntry {
-	entries, err := os.ReadDir(filepath.Join(dir, actionsDir))
-	if err != nil {
-		return nil
-	}
-	return entries
+	return diags, nil
 }
 
 // bundledActions returns the actions a bundle ships: the name of
@@ -349,9 +388,9 @@ func actionEntries(dir string) []os.DirEntry {
 // extension: nightme registers a script under that name. A file that
 // is not a script provides no action — it is reported as the wrong
 // kind of file.
-func bundledActions(dir string) map[string]string {
+func bundledActions(dir string, entries []os.DirEntry) map[string]string {
 	out := map[string]string{}
-	for _, e := range actionEntries(dir) {
+	for _, e := range entries {
 		if e.IsDir() || filepath.Ext(e.Name()) != scriptExt {
 			continue
 		}
@@ -367,39 +406,61 @@ func bundledActions(dir string) map[string]string {
 // usedActions returns the actions the steps of a workflow file use.
 //
 // The names come from the schema: the file is decoded into a
-// wfe.Workflow, so what the runtime would run is what is checked. The
-// places come from the tree of the file, so every name can be pointed
-// at.
-func usedActions(path string) ([]useRef, error) {
+// wfe.Workflow and bound with the arguments it declares, so what the
+// runtime would run is what is checked. The places come from the tree
+// of the file, so every name can be pointed at.
+//
+// The second value says whether the set of used actions is known. It
+// is not when the file does not parse, when its steps cannot be read,
+// or when a step names its action with an expression the run has not
+// resolved yet: the wiring is then unknown, and nothing is said
+// about it.
+func usedActions(path string) ([]useRef, bool, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	var doc yaml.Node
 	if err := yaml.Unmarshal(raw, &doc); err != nil {
 		// A file that does not parse is reported by the schema
 		// check; what it uses is not worth guessing.
-		return nil, nil
+		return nil, false, nil
 	}
 	root := documentRoot(&doc)
 	if root == nil {
-		return nil, nil
+		return nil, false, nil
+	}
+	places, readable := usePlaces(root)
+	if !readable {
+		return nil, false, nil
 	}
 	names := map[string]bool{}
 	var wf wfe.Workflow
 	// A file that does not decode is reported by the schema check.
 	// What it does use is still worth knowing.
 	_ = root.Decode(&wf)
-	for _, job := range wf.Jobs {
+	// The runtime binds the arguments of a workflow before it runs
+	// it: an action named by an argument is an ordinary action.
+	bound, err := wfe.Bind(&wf, nil)
+	if err != nil {
+		bound = &wf
+	}
+	for _, job := range bound.Jobs {
 		for _, step := range job.Steps {
 			if step.Use != "" {
 				names[step.Use] = true
 			}
 		}
 	}
-	places := usePlaces(root)
 	refs := make([]useRef, 0, len(names))
+	complete := true
 	for name := range names {
+		if isExpression(name) {
+			// The action is chosen at runtime: the wiring cannot
+			// be judged here.
+			complete = false
+			continue
+		}
 		ref := useRef{name: name}
 		if p, ok := places[name]; ok {
 			ref.line, ref.column = p.line, p.column
@@ -407,7 +468,13 @@ func usedActions(path string) ([]useRef, error) {
 		refs = append(refs, ref)
 	}
 	sortUseRefs(refs)
-	return refs, nil
+	return refs, complete, nil
+}
+
+// isExpression reports whether a text holds an expression the run has
+// not resolved yet.
+func isExpression(text string) bool {
+	return strings.Contains(text, "${{")
 }
 
 // useRef is one `use:` step: the action it names and the place it
@@ -432,21 +499,32 @@ func documentRoot(doc *yaml.Node) *yaml.Node {
 	return doc
 }
 
-// usePlaces returns where each `use:` of a workflow file stands.
+// usePlaces returns where each `use:` of a workflow file stands, and
+// whether the steps of the file could be read at all.
 //
 // The walk follows the shape of the schema: the jobs hold the steps,
-// and the steps hold the `use:`.
-func usePlaces(root *yaml.Node) map[string]useRef {
+// and the steps hold the `use:`. A file whose shape is broken is
+// reported by the schema check; what it uses is not worth guessing.
+func usePlaces(root *yaml.Node) (map[string]useRef, bool) {
 	out := map[string]useRef{}
+	if root.Kind != yaml.MappingNode {
+		return out, false
+	}
 	for _, jobs := range mappingValues(root, "jobs") {
+		if jobs.Kind != yaml.MappingNode {
+			return out, false
+		}
 		for _, job := range mappingItems(jobs) {
+			if job.Kind != yaml.MappingNode {
+				return out, false
+			}
 			for _, steps := range mappingValues(job, "steps") {
 				if steps.Kind != yaml.SequenceNode {
-					continue
+					return out, false
 				}
 				for _, step := range steps.Content {
 					if step.Kind != yaml.MappingNode {
-						continue
+						return out, false
 					}
 					for i := 0; i+1 < len(step.Content); i += 2 {
 						key, val := step.Content[i], step.Content[i+1]
@@ -462,7 +540,7 @@ func usePlaces(root *yaml.Node) map[string]useRef {
 			}
 		}
 	}
-	return out
+	return out, true
 }
 
 // mappingItems returns the values of every key of a mapping.
