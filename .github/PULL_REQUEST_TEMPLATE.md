@@ -6,14 +6,13 @@
 
 <!-- The GitHub account name your workflow is published under. -->
 
-- [ ] The namespace is my own account, and I am the author of this pull
-      request.
-
 ## The reviewer's questions
 
-These are the questions the reviewer answers before merging. Answer them here
-if you can — the reviewer will check them anyway.
+These are the questions the reviewer answers before merging. The pull request
+should make the answers easy to find — say what the `shell:` steps run and
+what they touch.
 
+- [ ] **Is the namespace the author's own?**
 - [ ] **Is the name apt?** Does `<name>` say what the workflow does?
 - [ ] **What will the `shell:` steps execute?** List the commands, or say
       that the workflow has none.

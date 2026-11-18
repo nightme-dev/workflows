@@ -100,8 +100,9 @@ An action name may come from an argument — `use: ${{ args.which }}` — the wa
 any other field of a step may. The runtime binds the arguments of a workflow
 before it runs it, so the name is resolved to the action it names. The
 validator binds the arguments the workflow declares as well, so an action
-named by an argument is checked like any other one; an action named by
-something the run has not resolved yet is left alone.
+named by an argument is checked like any other one. An action named by
+something the run has not resolved yet is left alone — and then no bundled
+action is reported as unused either, because the wiring cannot be judged.
 
 A bundle may also carry a `README.md`. It is addressed to humans, it is not
 part of the format, and the validator ignores it.
@@ -160,12 +161,12 @@ The CI pipeline runs one job: the validator. It also runs the tests of the
 validator itself, so a change that breaks them is caught before it breaks the
 check.
 
-The pipeline and the validator are protected by
-[CODEOWNERS](.github/CODEOWNERS): a pull request that changes either of them
-needs a review from a code owner. The validator is protected for the same
-reason as the pipeline — a change that made it pass everything would defeat
-the check.
+The pipeline is part of the repository like everything else: a pull request
+that changes it is reviewed like any other pull request, and the reviewer
+decides whether it is safe to merge. There is no separate class of files and
+no separate list of approvers — this repository is co-created, and the people
+who work in it are the ones who decide what goes into it.
 
-A CODEOWNERS rule only takes effect once the repository setting **Settings →
-Repositories → Settings → Require review from Code Owners** is enabled. Until
-a maintainer turns it on, a pull request can change the CI pipeline itself.
+That also means the validator itself is not fenced off: a pull request that
+changes the validator changes what "valid" means for everybody. The reviewer
+is asked to look at it with that in mind.
