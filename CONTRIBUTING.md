@@ -96,6 +96,13 @@ workflows/<ns>/<name>/actions/<action>.sh
   same name are both reported: a `use:` step says which action it means, and
   the name alone does not.
 
+An action name may come from an argument — `use: ${{ args.which }}` — the way
+any other field of a step may. The runtime binds the arguments of a workflow
+before it runs it, so the name is resolved to the action it names. The
+validator binds the arguments the workflow declares as well, so an action
+named by an argument is checked like any other one; an action named by
+something the run has not resolved yet is left alone.
+
 A bundle may also carry a `README.md`. It is addressed to humans, it is not
 part of the format, and the validator ignores it.
 
@@ -149,9 +156,15 @@ reports the shape of a name, never who owns it.
 
 ## The CI pipeline
 
-The CI pipeline runs one job: the validator. It is protected by
-[CODEOWNERS](.github/CODEOWNERS), so a pull request that changes it needs a
-review from a code owner.
+The CI pipeline runs one job: the validator. It also runs the tests of the
+validator itself, so a change that breaks them is caught before it breaks the
+check.
+
+The pipeline and the validator are protected by
+[CODEOWNERS](.github/CODEOWNERS): a pull request that changes either of them
+needs a review from a code owner. The validator is protected for the same
+reason as the pipeline — a change that made it pass everything would defeat
+the check.
 
 A CODEOWNERS rule only takes effect once the repository setting **Settings →
 Repositories → Settings → Require review from Code Owners** is enabled. Until

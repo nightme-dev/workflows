@@ -5,12 +5,22 @@ on:
     branches: [main]
   pull_request:
 
+# The job reads the tree and nothing else.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: '1.27'
+      - run: go test ./...
       - run: go run ./cmd/validate ./workflows
