@@ -153,7 +153,9 @@ check.
 
 The job validates the bundles the pull request changed, and only those: a
 pull request is judged on what it changed, and a workflow nobody touched
-cannot fail it. The tests of the validator run on every push and every pull
+cannot fail it. The rules that need the whole tree — the unique identity,
+the unique action name — are not among them: they are checked by the full
+local run. The tests of the validator run on every push and every pull
 request, whether a workflow changed or not.
 
 The pipeline is part of the repository like everything else: a pull request

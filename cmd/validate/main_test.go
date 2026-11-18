@@ -603,3 +603,38 @@ func TestChangedNamesABundleByItsFirstTwoSegments(t *testing.T) {
 	diags := tr.validateChanged("alice/fix/actions/report.sh")
 	wantProblem(t, diags, "jobs is required")
 }
+
+func TestChangedChecksTheSameBundleOnce(t *testing.T) {
+	tr := newTree(t)
+	tr.bundle("alice", "fix", "jobs: {}\n")
+	// The same bundle, named two ways: it is checked once.
+	diags := tr.validateChanged("alice/fix", "alice/fix/workflow.yml", "alice/fix/")
+	if got := strings.Count(report(diags), "jobs is required"); got != 1 {
+		t.Errorf("the problem is reported %d times, want 1:\n%s", got, report(diags))
+	}
+}
+
+func TestChangedOnASingleBundleSaysWhy(t *testing.T) {
+	tr := newTree(t)
+	tr.bundle("alice", "fix", validWorkflow)
+	code, _, errOut := runProgram(t, "--changed", "alice/fix",
+		filepath.Join(tr.dir, "workflows", "alice", "fix"))
+	if code != exitUsage {
+		t.Errorf("a bundle as the root exits %d, want %d", code, exitUsage)
+	}
+	if !strings.Contains(errOut, "the root is a bundle") {
+		t.Errorf("the reason is not shown:\n%s", errOut)
+	}
+}
+
+func TestChangedRejectsAPathOutsideTheRoot(t *testing.T) {
+	tr := newTree(t)
+	tr.bundle("alice", "fix", validWorkflow)
+	code, _, errOut := runProgram(t, "--changed", "../other/bundle", tr.root())
+	if code != exitUsage {
+		t.Errorf("a path outside the root exits %d, want %d", code, exitUsage)
+	}
+	if !strings.Contains(errOut, "outside the workflows directory") {
+		t.Errorf("the reason is not shown:\n%s", errOut)
+	}
+}

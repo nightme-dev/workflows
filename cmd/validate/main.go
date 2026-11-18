@@ -50,10 +50,22 @@ const (
 // defaultRoot is the directory the workflows live in.
 const defaultRoot = "workflows"
 
+// usageError says the command was called wrong.
+//
+// The reason is worth showing: the usage line alone does not say what
+// was wrong with the call.
+type usageError struct {
+	reason string
+}
+
+func (e *usageError) Error() string {
+	return e.reason
+}
+
 // errNotRoot says the root is a bundle rather than the workflows
 // directory. The scoped mode names bundles under the root, so it
 // cannot run against a bundle.
-var errNotRoot = errors.New("the root is a bundle, not the workflows directory")
+var errNotRoot = &usageError{reason: "the root is a bundle, not the workflows directory"}
 
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
@@ -70,8 +82,22 @@ func run(args []string, out, errOut io.Writer) int {
 	flags.Usage = func() {
 		fmt.Fprintf(errOut, "usage: validate [--changed <values>] [%s]\n", defaultRoot)
 	}
-	var changed changedList
-	flags.Var(&changed, "changed", "the bundles to validate")
+	// The bundles the scoped mode validates, and whether the flag was
+	// given at all: an empty value validates nothing, it does not turn
+	// the full mode on.
+	var given bool
+	var values []string
+	flags.Func("changed", "the bundles to validate", func(value string) error {
+		given = true
+		for _, v := range strings.Split(value, ",") {
+			v = strings.TrimSpace(v)
+			if v == "" {
+				continue
+			}
+			values = append(values, v)
+		}
+		return nil
+	})
 	if err := flags.Parse(args); err != nil {
 		return exitUsage
 	}
@@ -86,13 +112,15 @@ func run(args []string, out, errOut io.Writer) int {
 	}
 	var diags []wfe.Diagnostic
 	var err error
-	if changed.given {
-		diags, err = validateChanged(root, changed.values)
+	if given {
+		diags, err = validateChanged(root, values)
 	} else {
 		diags, err = validate(root)
 	}
 	if err != nil {
-		if errors.Is(err, errNotRoot) {
+		var usage *usageError
+		if errors.As(err, &usage) {
+			fmt.Fprintf(errOut, "%v\n", usage)
 			flags.Usage()
 			return exitUsage
 		}
@@ -106,40 +134,6 @@ func run(args []string, out, errOut io.Writer) int {
 		return exitInvalid
 	}
 	return exitOK
-}
-
-// changedList is the value of the --changed flag: the bundles the
-// scoped mode validates.
-//
-// The flag may be given more than once, and one value may hold more
-// than one bundle: the bundles are separated by commas. The list
-// remembers that the flag was given, so that an empty value is not
-// the absence of the flag.
-type changedList struct {
-	given  bool
-	values []string
-}
-
-// String returns the value of the flag, the way it is written on the
-// command line.
-func (c *changedList) String() string {
-	return strings.Join(c.values, ",")
-}
-
-// Set adds the bundles of one value of the flag.
-//
-// An empty bundle is not a bundle: it is dropped, so that an empty
-// value names nothing at all.
-func (c *changedList) Set(value string) error {
-	c.given = true
-	for _, v := range strings.Split(value, ",") {
-		v = strings.TrimSpace(v)
-		if v == "" {
-			continue
-		}
-		c.values = append(c.values, v)
-	}
-	return nil
 }
 
 // validate checks the workflows under root and returns every problem
@@ -198,8 +192,20 @@ func validateChanged(root string, values []string) ([]wfe.Diagnostic, error) {
 		return nil, errNotRoot
 	}
 	var diags []wfe.Diagnostic
-	for _, value := range distinct(values) {
-		valueDiags, err := checkChanged(root, value)
+	seen := map[string]bool{}
+	for _, value := range values {
+		segments, err := changedSegments(value)
+		if err != nil {
+			return nil, err
+		}
+		// The same bundle named two ways is checked once: a problem is
+		// reported once.
+		key := strings.Join(segments, "/")
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		valueDiags, err := checkChanged(root, segments)
 		if err != nil {
 			return nil, err
 		}
@@ -209,23 +215,44 @@ func validateChanged(root string, values []string) ([]wfe.Diagnostic, error) {
 	return diags, nil
 }
 
-// checkChanged checks what one value of the --changed flag names.
+// changedSegments returns the segments a value names.
 //
-// The value is a path under the root. Two segments name a bundle; one
-// segment names a file or a namespace directory; three or more name a
-// bundle by their first two segments, the rest is ignored.
+// Two segments name a bundle; one segment names a file or a namespace
+// directory; three or more name a bundle by their first two segments,
+// the rest is ignored: a value names a bundle, not a file of the
+// bundle.
+//
+// A path that goes up names a path outside the root, and it is not a
+// path of the repository.
+func changedSegments(value string) ([]string, error) {
+	var out []string
+	for _, s := range strings.Split(value, "/") {
+		switch s {
+		case "", ".":
+			continue
+		case "..":
+			return nil, &usageError{reason: fmt.Sprintf(
+				"the value %q names a path outside the workflows directory", value)}
+		}
+		out = append(out, s)
+	}
+	if len(out) > 2 {
+		out = out[:2]
+	}
+	return out, nil
+}
+
+// checkChanged checks what the segments of one value of the --changed
+// flag name.
+//
+// Two segments name a bundle; one segment names a file or a namespace
+// directory.
 //
 // A path that is not there is not a problem: the bundle was deleted,
 // and there is nothing left to validate.
-func checkChanged(root, value string) ([]wfe.Diagnostic, error) {
-	segments := splitSegments(value)
+func checkChanged(root string, segments []string) ([]wfe.Diagnostic, error) {
 	if len(segments) == 0 {
 		return nil, nil
-	}
-	if len(segments) > 2 {
-		// The rest of the path is ignored: a value names a bundle, not
-		// a file of the bundle.
-		segments = segments[:2]
 	}
 	path := filepath.Join(root, segments[0])
 	if len(segments) == 2 {
@@ -271,37 +298,6 @@ func checkChanged(root, value string) ([]wfe.Diagnostic, error) {
 	}
 	diags = append(diags, bundleDiags...)
 	return diags, nil
-}
-
-// splitSegments returns the segments of a path.
-//
-// A path with a trailing slash, or with an empty segment, names the
-// same thing as the path without them.
-func splitSegments(value string) []string {
-	var out []string
-	for _, s := range strings.Split(value, "/") {
-		if s == "" || s == "." {
-			continue
-		}
-		out = append(out, s)
-	}
-	return out
-}
-
-// distinct returns the values without the ones that came before.
-//
-// A bundle named twice is checked once: a problem is reported once.
-func distinct(values []string) []string {
-	seen := map[string]bool{}
-	out := make([]string, 0, len(values))
-	for _, v := range values {
-		if seen[v] {
-			continue
-		}
-		seen[v] = true
-		out = append(out, v)
-	}
-	return out
 }
 
 // problem returns the diagnostic of a problem at a place.
