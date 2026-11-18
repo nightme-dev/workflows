@@ -2,8 +2,12 @@
 //
 // It is the machine half of the community process: it decides the
 // objective facts — does the file parse, is it a workflow, are the
-// names right, is every action wired, does the catalog agree with the
-// tree — and it leaves the judgment to the reviewer.
+// names right, is every action wired — and it leaves the judgment to
+// the reviewer.
+//
+// It has two modes. The full mode checks the whole tree. The scoped
+// mode checks only the bundles it is given, so that a pull request is
+// judged on what it changed.
 //
 // Every problem is one line, "path:line:column: message", the format
 // of wfe.Diagnostic.Error(). A run where every workflow is valid
@@ -15,9 +19,13 @@
 package main
 
 import (
+	"errors"
+	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -42,6 +50,23 @@ const (
 // defaultRoot is the directory the workflows live in.
 const defaultRoot = "workflows"
 
+// usageError says the command was called wrong.
+//
+// The reason is worth showing: the usage line alone does not say what
+// was wrong with the call.
+type usageError struct {
+	reason string
+}
+
+func (e *usageError) Error() string {
+	return e.reason
+}
+
+// errNotRoot says the root is a bundle rather than the workflows
+// directory. The scoped mode names bundles under the root, so it
+// cannot run against a bundle.
+var errNotRoot = &usageError{reason: "the root is a bundle, not the workflows directory"}
+
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }
@@ -52,16 +77,53 @@ func main() {
 // to errOut. It is a function of its own so a test can call it
 // without ending the process.
 func run(args []string, out, errOut io.Writer) int {
-	if len(args) > 1 || (len(args) == 1 && strings.TrimSpace(args[0]) == "") {
-		fmt.Fprintf(errOut, "usage: validate [%s]\n", defaultRoot)
+	flags := flag.NewFlagSet("validate", flag.ContinueOnError)
+	flags.SetOutput(errOut)
+	flags.Usage = func() {
+		fmt.Fprintf(errOut, "usage: validate [--changed <values>] [%s]\n", defaultRoot)
+	}
+	// The bundles the scoped mode validates, and whether the flag was
+	// given at all: an empty value validates nothing, it does not turn
+	// the full mode on.
+	var given bool
+	var values []string
+	flags.Func("changed", "the bundles to validate", func(value string) error {
+		given = true
+		for _, v := range strings.Split(value, ",") {
+			v = strings.TrimSpace(v)
+			if v == "" {
+				continue
+			}
+			values = append(values, v)
+		}
+		return nil
+	})
+	if err := flags.Parse(args); err != nil {
+		return exitUsage
+	}
+	rest := flags.Args()
+	if len(rest) > 1 || (len(rest) == 1 && strings.TrimSpace(rest[0]) == "") {
+		flags.Usage()
 		return exitUsage
 	}
 	root := defaultRoot
-	if len(args) == 1 {
-		root = args[0]
+	if len(rest) == 1 {
+		root = rest[0]
 	}
-	diags, err := validate(root)
+	var diags []wfe.Diagnostic
+	var err error
+	if given {
+		diags, err = validateChanged(root, values)
+	} else {
+		diags, err = validate(root)
+	}
 	if err != nil {
+		var usage *usageError
+		if errors.As(err, &usage) {
+			fmt.Fprintf(errOut, "%v\n", usage)
+			flags.Usage()
+			return exitUsage
+		}
 		fmt.Fprintf(errOut, "%s: %v\n", root, err)
 		return exitUnreadable
 	}
@@ -106,22 +168,136 @@ func validate(root string) ([]wfe.Diagnostic, error) {
 	diags = append(diags, checkIdentities(bundles)...)
 	// An action name is shipped by one bundle.
 	diags = append(diags, checkActionNames(bundles)...)
-	// The catalog agrees with the tree. A single bundle carries no
-	// address, so there is nothing to compare.
-	if !isSingleBundle(bundles) {
-		diags = append(diags, checkCatalog(root, bundles)...)
+	sortDiagnostics(diags)
+	return diags, nil
+}
+
+// validateChanged checks only the bundles the values name.
+//
+// The values are paths under the root: a bundle, a namespace
+// directory or a file. The scoped mode consults nothing global: it
+// reads the named bundles and nothing else, so a bundle stands on its
+// own.
+//
+// The error it returns is not a problem of a workflow: it says the
+// path could not be read, and the caller turns it into the exit code
+// 9. Every other problem is a diagnostic.
+func validateChanged(root string, values []string) ([]wfe.Diagnostic, error) {
+	root = clean(root)
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return nil, err
+	}
+	if singleBundle(root, entries) {
+		return nil, errNotRoot
+	}
+	var diags []wfe.Diagnostic
+	seen := map[string]bool{}
+	for _, value := range values {
+		segments, err := changedSegments(value)
+		if err != nil {
+			return nil, err
+		}
+		// The same bundle named two ways is checked once: a problem is
+		// reported once.
+		key := strings.Join(segments, "/")
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		valueDiags, err := checkChanged(root, segments)
+		if err != nil {
+			return nil, err
+		}
+		diags = append(diags, valueDiags...)
 	}
 	sortDiagnostics(diags)
 	return diags, nil
 }
 
-// isSingleBundle reports whether the validator was pointed at one
-// bundle rather than at the workflows directory.
+// changedSegments returns the segments a value names.
 //
-// A single bundle carries no address of its own: its namespace and
-// its name are read from the tree only when the whole tree is there.
-func isSingleBundle(bundles []bundle) bool {
-	return len(bundles) == 1 && bundles[0].address() == ""
+// Two segments name a bundle; one segment names a file or a namespace
+// directory; three or more name a bundle by their first two segments,
+// the rest is ignored: a value names a bundle, not a file of the
+// bundle.
+//
+// A path that goes up names a path outside the root, and it is not a
+// path of the repository.
+func changedSegments(value string) ([]string, error) {
+	var out []string
+	for _, s := range strings.Split(value, "/") {
+		switch s {
+		case "", ".":
+			continue
+		case "..":
+			return nil, &usageError{reason: fmt.Sprintf(
+				"the value %q names a path outside the workflows directory", value)}
+		}
+		out = append(out, s)
+	}
+	if len(out) > 2 {
+		out = out[:2]
+	}
+	return out, nil
+}
+
+// checkChanged checks what the segments of one value of the --changed
+// flag name.
+//
+// Two segments name a bundle; one segment names a file or a namespace
+// directory.
+//
+// A path that is not there is not a problem: the bundle was deleted,
+// and there is nothing left to validate.
+func checkChanged(root string, segments []string) ([]wfe.Diagnostic, error) {
+	if len(segments) == 0 {
+		return nil, nil
+	}
+	path := filepath.Join(root, segments[0])
+	if len(segments) == 2 {
+		path = filepath.Join(path, segments[1])
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if len(segments) == 1 {
+		if !info.IsDir() {
+			// A file directly under the root: a workflow lives in a
+			// bundle directory.
+			return []wfe.Diagnostic{problem(path, 0, 0,
+				"a workflow lives in a bundle directory: %s", bundleLayout())}, nil
+		}
+		// A namespace directory: the shape of its name only.
+		return checkNS(path, segments[0]), nil
+	}
+	if !info.IsDir() {
+		// A file under a namespace directory: the namespace directory
+		// holds bundle directories only.
+		return []wfe.Diagnostic{problem(path, 0, 0,
+			"a namespace directory holds bundle directories only: %s", bundleDirLayout())}, nil
+	}
+	// A bundle: the shape of its address, then the rules of the bundle
+	// itself.
+	b := bundle{ns: segments[0], name: segments[1], dir: path}
+	var diags []wfe.Diagnostic
+	diags = append(diags, checkNames([]bundle{b})...)
+	// The bundle uses the .yml extension only.
+	extensions, err := checkExtensions(path)
+	if err != nil {
+		return nil, err
+	}
+	diags = append(diags, extensions...)
+	bundleDiags, err := checkBundle(b)
+	if err != nil {
+		return nil, err
+	}
+	diags = append(diags, bundleDiags...)
+	return diags, nil
 }
 
 // problem returns the diagnostic of a problem at a place.

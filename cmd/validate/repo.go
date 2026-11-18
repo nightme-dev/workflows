@@ -62,14 +62,6 @@ type bundle struct {
 	dir string
 }
 
-// address is the workflow's address: <ns>/<name>.
-func (b bundle) address() string {
-	if b.ns == "" || b.name == "" {
-		return ""
-	}
-	return b.ns + "/" + b.name
-}
-
 // identity is the name the workflow carries once it is installed next
 // to other workflows: <ns>-<name>.
 func (b bundle) identity() string {
@@ -106,7 +98,7 @@ func discover(root string) ([]bundle, []wfe.Diagnostic, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	if holdsWorkflowFile(entries) && !holdsNamespaceDir(root, entries) {
+	if singleBundle(root, entries) {
 		return []bundle{{dir: root}}, nil, nil
 	}
 	var bundles []bundle
@@ -137,6 +129,16 @@ func discover(root string) ([]bundle, []wfe.Diagnostic, error) {
 		}
 	}
 	return bundles, diags, nil
+}
+
+// singleBundle reports whether the root holds a single bundle rather
+// than the workflows directory.
+//
+// A root that holds a workflow file and no namespace directory is a
+// single bundle: the validator then checks that one workflow and its
+// attachments, and leaves the rules that need the whole tree alone.
+func singleBundle(root string, entries []os.DirEntry) bool {
+	return holdsWorkflowFile(entries) && !holdsNamespaceDir(root, entries)
 }
 
 // holdsWorkflowFile reports whether the entries hold a workflow file.
@@ -218,9 +220,8 @@ func checkExtensions(root string) ([]wfe.Diagnostic, error) {
 func checkNames(bundles []bundle) []wfe.Diagnostic {
 	var diags []wfe.Diagnostic
 	for _, b := range bundles {
-		if b.ns != "" && !nsPattern.MatchString(b.ns) {
-			diags = append(diags, problem(filepath.Dir(b.dir), 0, 0,
-				"the namespace %q is not a GitHub account name: letters, digits and dashes", b.ns))
+		if b.ns != "" {
+			diags = append(diags, checkNS(filepath.Dir(b.dir), b.ns)...)
 		}
 		if b.name != "" && !namePattern.MatchString(b.name) {
 			diags = append(diags, problem(b.dir, 0, 0,
@@ -228,6 +229,17 @@ func checkNames(bundles []bundle) []wfe.Diagnostic {
 		}
 	}
 	return diags
+}
+
+// checkNS reports the shape of one namespace.
+//
+// The directory is the namespace directory the problem stands in.
+func checkNS(dir, ns string) []wfe.Diagnostic {
+	if nsPattern.MatchString(ns) {
+		return nil
+	}
+	return []wfe.Diagnostic{problem(dir, 0, 0,
+		"the namespace %q is not a GitHub account name: letters, digits and dashes", ns)}
 }
 
 // checkIdentities reports the bundles that share an identity.

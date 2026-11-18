@@ -107,22 +107,13 @@ action is reported as unused either, because the wiring cannot be judged.
 A bundle may also carry a `README.md`. It is addressed to humans, it is not
 part of the format, and the validator ignores it.
 
-### The catalog
-
-The `## Workflows` section of [README.md](README.md) lists every workflow of
-the repository, one table row per workflow, with the address in backticks in
-the first column. The catalog is written by hand and the validator checks it
-against the tree: a workflow that is not listed is reported, and so is an
-entry that names no workflow.
-
 ## The process
 
 1. Fork the repository and make a branch.
 2. Add your bundle under `workflows/<ns>/<name>/`, with the workflow file and
    whatever it ships.
-3. Add your address to the `## Workflows` section of the README.
-4. Run the validator: `go run ./cmd/validate ./workflows`. It has to exit 0.
-5. Open a pull request. CI runs the same command and has to pass.
+3. Run the validator: `go run ./cmd/validate ./workflows`. It has to exit 0.
+4. Open a pull request. CI validates the bundles the pull request changed.
 
 The pull request template asks the questions a reviewer has to answer.
 
@@ -139,7 +130,6 @@ does not try, and it does not report anything it cannot know.
 | the names are shaped right, the identity is unique | what will the `shell:` steps execute? |
 | `use:` names resolve to a built-in action or a bundled script | what will they write or delete? |
 | bundled scripts are executable and all of them are referenced | should this be several workflows? |
-| the README catalog matches the tree | is it safe to merge? |
 
 The namespace is the pull request author's own choice, and no namespace is
 reserved: this repository is community co-created. Whether the namespace
@@ -160,6 +150,13 @@ reports the shape of a name, never who owns it.
 The CI pipeline runs one job: the validator. It also runs the tests of the
 validator itself, so a change that breaks them is caught before it breaks the
 check.
+
+The job validates the bundles the pull request changed, and only those: a
+pull request is judged on what it changed, and a workflow nobody touched
+cannot fail it. The rules that need the whole tree — the unique identity,
+the unique action name — are not among them: they are checked by the full
+local run. The tests of the validator run on every push and every pull
+request, whether a workflow changed or not.
 
 The pipeline is part of the repository like everything else: a pull request
 that changes it is reviewed like any other pull request, and the reviewer

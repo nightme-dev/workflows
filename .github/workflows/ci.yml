@@ -19,8 +19,42 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The whole history: the base commit of the pull request has
+          # to be there for the diff.
+          fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
           go-version: '1.27'
       - run: go test ./...
-      - run: go run ./cmd/validate ./workflows
+      - name: Validate the changed workflows
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+          base="$BASE"
+          if [ -n "${BASE_REF:-}" ] && git rev-parse --verify --quiet "origin/$BASE_REF" >/dev/null; then
+            # A pull request: the base is the tip of the base branch.
+            # The sha of the event is the tip at the time the pull
+            # request was opened, and it does not follow the base
+            # branch — the diff would carry the changes of the base
+            # branch along. The whole history is fetched, so the tip of
+            # the branch is there.
+            base="origin/$BASE_REF"
+          fi
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
+            # No base commit: every file counts as changed.
+            base=$(git hash-object -t tree /dev/null)
+            files=$(git diff --name-only --no-renames "$base" HEAD -- workflows/)
+          else
+            files=$(git diff --name-only --no-renames "$base...HEAD" -- workflows/)
+          fi
+          changed=$(printf '%s\n' "$files" | sed 's|^workflows/||' \
+            | awk -F/ 'NF >= 2 { print $1 "/" $2 } NF == 1 { print $1 }' \
+            | sort -u | paste -sd,)
+          if [ -z "$changed" ]; then
+            echo "no workflow changed"
+            exit 0
+          fi
+          go run ./cmd/validate --changed "$changed" ./workflows

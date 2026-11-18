@@ -23,9 +23,10 @@ what they touch.
 
 ## The checklist
 
-- [ ] `go run ./cmd/validate ./workflows` exits 0.
-- [ ] The address of the workflow is listed in the `## Workflows` section of
-      the README.
+- [ ] `go run ./cmd/validate ./workflows` exits 0 — the local check of the
+      whole tree.
+- [ ] `go run ./cmd/validate --changed <ns>/<name> ./workflows` exits 0 — the
+      check CI runs on the bundle this pull request changes.
 - [ ] The workflow file holds only the keys of the schema.
 - [ ] Every script of the `actions/` directory is executable and is used by a
       step.
