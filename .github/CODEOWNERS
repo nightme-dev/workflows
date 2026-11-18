@@ -1,0 +1,6 @@
+# The CI pipeline decides whether the other checks run, so a pull
+# request that changes it needs a review from a code owner.
+#
+# The rule only takes effect once the repository setting "Require
+# review from Code Owners" is enabled — see CONTRIBUTING.md.
+/.github/workflows/ci.yml @cnlangzi
