@@ -9,8 +9,6 @@ on:
 # nothing but the site: the repository itself is read-only here.
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages
@@ -18,11 +16,15 @@ concurrency:
 
 jobs:
   build:
+    # A manual run rebuilds the site of main: a branch that has not
+    # been reviewed has no business publishing the site.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      contents: read
+    outputs:
+      build: ${{ steps.changes.outputs.build }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -42,12 +44,14 @@ jobs:
         run: |
           set -euo pipefail
           base="$BASE"
-          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
-            # No base commit: every file counts as changed.
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] \
+             || ! git rev-parse --verify --quiet "$base" >/dev/null; then
+            # No base commit, or a base that is not in the clone:
+            # every file counts as changed.
             base=$(git hash-object -t tree /dev/null)
-            files=$(git diff --name-only --no-renames "$base" HEAD -- workflows/ templates/ cmd/site/ Gemfile Gemfile.lock)
+            files=$(git diff --name-only --no-renames "$base" HEAD -- workflows/ templates/ cmd/site/ go.mod go.sum Gemfile Gemfile.lock)
           else
-            files=$(git diff --name-only --no-renames "$base...HEAD" -- workflows/ templates/ cmd/site/ Gemfile Gemfile.lock)
+            files=$(git diff --name-only --no-renames "$base...HEAD" -- workflows/ templates/ cmd/site/ go.mod go.sum Gemfile Gemfile.lock)
           fi
           if [ -z "$files" ]; then
             # Nothing that the site is made of changed: the site that
@@ -64,6 +68,7 @@ jobs:
       - uses: ruby/setup-ruby@v1
         if: steps.changes.outputs.build == 'true'
         with:
+          ruby-version: '3.3'
           bundler-cache: true
       - name: Build the site
         if: steps.changes.outputs.build == 'true'
@@ -80,7 +85,27 @@ jobs:
         if: steps.changes.outputs.build == 'true'
         with:
           path: .site
+
+  deploy:
+    # The deploy job is the only job that holds the permissions the
+    # publication needs: the build never holds a token that could
+    # mint one.
+    needs: build
+    if: needs.build.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+        with:
+          # The Pages site is enabled by the administrator of the
+          # repository; the workflow does not enable it.
+          enablement: false
       - name: Deploy to GitHub Pages
         id: deployment
-        if: steps.changes.outputs.build == 'true'
         uses: actions/deploy-pages@v4
