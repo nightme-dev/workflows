@@ -15,8 +15,11 @@ jobs:
         note: 把 agent 的改动提交成 commit。命令会告诉你修改有没有进到 git 里：提交上了是正常；没提交上但活已经干完了（agent 自己提交的）也是正常；outcome 带 error 才是异常（nothing_to_commit），那时再决定要不要让 agent 去改。
       - id: review
         message: "/review"
+        agents:
+          - mode: args
+            names: [omp, codex]
         if: ${{ steps.fix.outputs.data.issue }}
-        note: review 当前分支与默认分支的差异，findings 回到聊天里。中断（还有组没跑完）用 /review -c 续跑，不要用 -a（与 --continue 互斥）；already_running 就等它结束。no_diff 是异常：fix 本该改出了东西，分支却和 base 一样 —— instruct 让 agent 真正改出来，再跑 commit 和 review；base_unknown 是 base 分支没解析出来，也什么都没 review，先弄清 base 再跑 review。如果一直429, 使用/review -a codex代替
+        note: review 当前分支与默认分支的差异，findings 回到聊天里。本步的 agents 链是 [omp, codex]：先发 /review -a omp，只有 break（outcome 带 error 描述，如 429）才自动落到 /review -a codex —— findings 等正常 outcome（failed 但没有 error 描述）不会触发 codex 重跑；链的每次尝试各占本步 budget 的一次机会，一轮 review 最坏耗 2 次；本步被重跑（含 repair）时链从头开始，总是先试 omp。中断（还有组没跑完）instruct 让当前 agent 跑 /review -c 续跑，不要重跑本步：重跑发的是 /review -a omp，-a 与 -c 互斥，等于丢掉已有进度重开 review；中断是 cancelled，链直接结束，不会落到 codex。already_running 就等它结束。no_diff 是异常：fix 本该改出了东西，分支却和 base 一样 —— instruct 让 agent 真正改出来，再跑 commit 和 review；base_unknown 是 base 分支没解析出来，也什么都没 review，先弄清 base 再跑 review。
       - id: commit-revise
         message: "/gtw commit"
         if: ${{ steps.fix.outputs.data.issue }}
