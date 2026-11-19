@@ -1,0 +1,86 @@
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# The job reads the repository and publishes the site. It writes
+# nothing but the site: the repository itself is read-only here.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The whole history: the changes page and the last change of
+          # a workflow are read from it.
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check what changed
+        id: changes
+        env:
+          BASE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          base="$BASE"
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
+            # No base commit: every file counts as changed.
+            base=$(git hash-object -t tree /dev/null)
+            files=$(git diff --name-only --no-renames "$base" HEAD -- workflows/ templates/ cmd/site/ Gemfile Gemfile.lock)
+          else
+            files=$(git diff --name-only --no-renames "$base...HEAD" -- workflows/ templates/ cmd/site/ Gemfile Gemfile.lock)
+          fi
+          if [ -z "$files" ]; then
+            # Nothing that the site is made of changed: the site that
+            # is published is the site of the last build.
+            echo "nothing that touches the site changed"
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "$files"
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Generate the site source
+        if: steps.changes.outputs.build == 'true'
+        run: go run ./cmd/site --templates templates --workflows workflows --out docs
+      - uses: ruby/setup-ruby@v1
+        if: steps.changes.outputs.build == 'true'
+        with:
+          bundler-cache: true
+      - name: Build the site
+        if: steps.changes.outputs.build == 'true'
+        run: bundle exec jekyll build --source docs --destination .site
+      - name: Build the search index
+        if: steps.changes.outputs.build == 'true'
+        run: |
+          set -euo pipefail
+          # The version is pinned: the format of the index has to be
+          # the one the pages expect.
+          npm install --global pagefind@1.4.0
+          pagefind --site .site
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.changes.outputs.build == 'true'
+        with:
+          path: .site
+      - name: Deploy to GitHub Pages
+        id: deployment
+        if: steps.changes.outputs.build == 'true'
+        uses: actions/deploy-pages@v4

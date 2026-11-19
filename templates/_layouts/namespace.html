@@ -1,0 +1,12 @@
+---
+layout: default
+---
+{% assign workflows = site.data.workflows | where: "namespace", page.namespace %}
+<h1>{{ page.namespace }}</h1>
+<p class="lead">The workflows published under the namespace {{ page.namespace }}.</p>
+{% if workflows.size == 0 %}
+<p class="empty">This namespace has published no workflow yet.</p>
+{% endif %}
+<div class="cards">
+  {% for workflow in workflows %}{% include workflow-card.html %}{% endfor %}
+</div>

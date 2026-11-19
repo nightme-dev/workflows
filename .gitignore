@@ -6,3 +6,12 @@
 
 # The validator, built by `go build ./cmd/validate`.
 /validate
+
+# The generator, built by `go build ./cmd/site`.
+/site
+
+# The site source, written by `go run ./cmd/site`.
+/docs/
+
+# The built site, written by `bundle exec jekyll build`.
+/.site/

@@ -145,6 +145,35 @@ reports the shape of a name, never who owns it.
 - Should this be several workflows instead of one?
 - Is it safe to merge?
 
+## The site
+
+The repository has an index: <https://nightme-dev.github.io/workflows/>. It
+shows every workflow of the repository, and it is built by the CI on every
+push to `main` — the site is never written by hand.
+
+What a workflow says on the site comes from the workflow itself:
+
+- the `title` is the heading of the page;
+- the `args` are the arguments the workflow takes, with their defaults;
+- the `on` block is the list of the triggers;
+- the `workspaces` are the directories the workflow runs in;
+- the `jobs` and their `steps` are the steps of the workflow, with their
+  notes.
+
+A bundle may also carry a `README.md`, and its **first paragraph** is the
+summary of the workflow on the site. The first paragraph is the first block
+of text of the file that is not a heading, so a README that starts with a
+title and then explains the workflow in a paragraph shows that paragraph as
+the summary. A README that has no paragraph shows no summary at all: the
+site leaves the section out rather than showing an empty one.
+
+The pages of the site are generated from the workflows and from the templates
+in `templates/`; nothing of the site is committed to the repository. A
+workflow that is taken away takes its page with it: the site is built from
+scratch every time, and the page of a workflow that no longer exists is
+simply not there. The layout of the site is reviewed like everything else: a
+change of the templates is a pull request.
+
 ## The CI pipeline
 
 The CI pipeline runs one job: the validator. It also runs the tests of the
@@ -157,6 +186,12 @@ cannot fail it. The rules that need the whole tree — the unique identity,
 the unique action name — are not among them: they are checked by the full
 local run. The tests of the validator run on every push and every pull
 request, whether a workflow changed or not.
+
+A second workflow publishes the site: it builds the index of the workflows,
+builds the site with Jekyll, builds the search index and publishes the
+result to GitHub Pages. It runs on a push to `main` that touches a workflow
+or the site itself, and on a manual run. A push that touches none of them
+skips it: the site that is published is the site of the last build.
 
 The pipeline is part of the repository like everything else: a pull request
 that changes it is reviewed like any other pull request, and the reviewer

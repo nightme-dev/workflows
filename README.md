@@ -82,3 +82,43 @@ bundles it changed are validated.
 
 The rules a workflow has to follow, the process a pull request goes through,
 and the questions a reviewer answers are in [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## The site
+
+The repository has an index: <https://nightme-dev.github.io/workflows/>. It
+is published by the CI on every push to `main` that touches a workflow or
+the site itself, so the index never has to be kept by hand.
+
+The site holds:
+
+- the home page, with every workflow and the namespace it belongs to;
+- a page per namespace, with the workflows of that namespace;
+- a page per workflow, with its title, its arguments, its triggers, its
+  workspaces, its jobs and steps, the actions it ships and the commit that
+  changed it last;
+- the changes page, with the commits that touched the workflows and what
+  they did;
+- a search box on every page, which searches the whole site.
+
+The site is built from the workflows and from the templates of the
+[`templates/`](templates/) directory. The templates are the only source of
+the layout: a change of the layout is a change of the templates and of
+nothing else. The generator is [`cmd/site`](cmd/site), and it reads the
+workflows with the same parser the validator uses.
+
+The site source and the built site are not in the repository. To see the
+site locally, generate the source and serve it:
+
+```sh
+go run ./cmd/site --templates templates --workflows workflows --out docs
+bundle exec jekyll serve --source docs --destination .site
+```
+
+The first command writes `docs/`: the facts of the workflows, the pages, and
+a copy of the templates. The second one builds the site and serves it at
+<http://localhost:4000/workflows/>. The search needs the index of Pagefind,
+which is built after Jekyll:
+
+```sh
+pagefind --site .site
+```

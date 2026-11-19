@@ -1,0 +1,9 @@
+# The configuration of the workflow index.
+#
+# The site is published at https://nightme-dev.github.io/workflows/, so
+# the baseurl is the name of the repository. Every link of the site
+# goes through relative_url, so it stays under the baseurl whether the
+# site is published or served locally.
+title: nightme workflows
+description: The workflows the nightme community publishes.
+baseurl: "/workflows"

@@ -1,0 +1,11 @@
+<div class="card">
+  <h3><a href="{{ '/' | append: workflow.address | append: '/' | relative_url }}">{{ workflow.title | escape }}</a></h3>
+  <p class="address">
+    <code>{{ workflow.address }}</code>
+    <code>{{ workflow.identity }}</code>
+  </p>
+  {% if workflow.summary != "" %}
+  <p class="summary">{{ workflow.summary | escape }}</p>
+  {% endif %}
+  <p class="date">last change: {{ workflow.last_commit.date }}</p>
+</div>
