@@ -4,7 +4,7 @@
   {% assign groups = site.data.workflows | group_by: "namespace" %}
   {% for group in groups %}
   <div class="nav-group">
-    <a class="nav-namespace" href="{{ '/' | append: group.name | append: '/' | relative_url }}">{{ group.name }}</a>
+    <a class="nav-namespace" href="{{ '/' | append: group.name | append: '/' | relative_url }}">{{ group.name | escape }}</a>
     <ul>
       {% for workflow in group.items %}
       <li><a href="{{ '/' | append: workflow.address | append: '/' | relative_url }}">{{ workflow.title | escape }}</a></li>

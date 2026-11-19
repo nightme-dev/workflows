@@ -7,8 +7,8 @@ layout: default
 {% else %}
 <h1>{{ workflow.title | escape }}</h1>
 <p class="address">
-  <code>{{ workflow.address }}</code>
-  <code>{{ workflow.identity }}</code>
+  <code>{{ workflow.address | escape }}</code>
+  <code>{{ workflow.identity | escape }}</code>
   {% if workflow.instruct %}<span class="tag">the messages are instructions to the agent</span>{% endif %}
 </p>
 <p class="source">
@@ -50,27 +50,27 @@ layout: default
     {% if workflow.on.pull_request %}
     <li>
       <code>pull_request</code>
-      {% if workflow.on.pull_request.branches %} — branches: {% for branch in workflow.on.pull_request.branches %}<code>{{ branch | escape }}</code>{% endfor %}{% endif %}
-      {% if workflow.on.pull_request.events %} — events: {% for event in workflow.on.pull_request.events %}<code>{{ event | escape }}</code>{% endfor %}{% endif %}
+      {% if workflow.on.pull_request.branches %} — branches: {% for branch in workflow.on.pull_request.branches %}<code>{{ branch | escape }}</code>{% unless forloop.last %}, {% endunless %}{% endfor %}{% endif %}
+      {% if workflow.on.pull_request.events %} — events: {% for event in workflow.on.pull_request.events %}<code>{{ event | escape }}</code>{% unless forloop.last %}, {% endunless %}{% endfor %}{% endif %}
     </li>
     {% endif %}
     {% if workflow.on.branch %}
     <li>
       <code>branch</code>
-      {% if workflow.on.branch.patterns %} — patterns: {% for pattern in workflow.on.branch.patterns %}<code>{{ pattern | escape }}</code>{% endfor %}{% endif %}
-      {% if workflow.on.branch.events %} — events: {% for event in workflow.on.branch.events %}<code>{{ event | escape }}</code>{% endfor %}{% endif %}
+      {% if workflow.on.branch.patterns %} — patterns: {% for pattern in workflow.on.branch.patterns %}<code>{{ pattern | escape }}</code>{% unless forloop.last %}, {% endunless %}{% endfor %}{% endif %}
+      {% if workflow.on.branch.events %} — events: {% for event in workflow.on.branch.events %}<code>{{ event | escape }}</code>{% unless forloop.last %}, {% endunless %}{% endfor %}{% endif %}
     </li>
     {% endif %}
     {% if workflow.on.issue %}
     <li>
       <code>issue</code>
-      {% if workflow.on.issue.events %} — events: {% for event in workflow.on.issue.events %}<code>{{ event | escape }}</code>{% endfor %}{% endif %}
+      {% if workflow.on.issue.events %} — events: {% for event in workflow.on.issue.events %}<code>{{ event | escape }}</code>{% unless forloop.last %}, {% endunless %}{% endfor %}{% endif %}
     </li>
     {% endif %}
     {% if workflow.on.mention %}
     <li>
       <code>mention</code>
-      {% if workflow.on.mention.commands %} — commands: {% for command in workflow.on.mention.commands %}<code>{{ command | escape }}</code>{% endfor %}{% else %} — any mention{% endif %}
+      {% if workflow.on.mention.commands %} — commands: {% for command in workflow.on.mention.commands %}<code>{{ command | escape }}</code>{% unless forloop.last %}, {% endunless %}{% endfor %}{% else %} — any mention{% endif %}
     </li>
     {% endif %}
   </ul>
@@ -94,7 +94,7 @@ layout: default
     <h3><code>{{ job.name | escape }}</code></h3>
     <p class="meta">
       {% if job.iterations == 0 %}runs until the run ends{% elsif job.iterations == 1 %}one round{% else %}{{ job.iterations }} rounds{% endif %}
-      {% if job.needs.size > 0 %} · needs: {% for need in job.needs %}<code>{{ need | escape }}</code>{% endfor %}{% endif %}
+      {% if job.needs.size > 0 %} · needs: {% for need in job.needs %}<code>{{ need | escape }}</code>{% unless forloop.last %}, {% endunless %}{% endfor %}{% endif %}
       {% if job.if != "" %} · if: <code>{{ job.if | escape }}</code>{% endif %}
     </p>
     <table class="steps">
@@ -118,14 +118,14 @@ layout: default
             {% elsif step.kind == "use" %}
             <pre>{{ step.use | escape }}</pre>
             {% if step.with.size > 0 %}
-            <pre>{% for pair in step.with %}{{ pair[0] }}: {{ pair[1] }}
+            <pre>{% for pair in step.with %}{{ pair[0] | escape }}: {{ pair[1] | escape }}
 {% endfor %}</pre>
             {% endif %}
             {% elsif step.kind == "wait" %}
             <pre>{{ step.wait | escape }}</pre>
             {% endif %}
             {% if step.env.size > 0 %}
-            <pre>{% for pair in step.env %}{{ pair[0] }}: {{ pair[1] }}
+            <pre>{% for pair in step.env %}{{ pair[0] | escape }}: {{ pair[1] | escape }}
 {% endfor %}</pre>
             {% endif %}
           </td>

@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 )
 
 // writeSite writes the site source into the out directory.
@@ -28,10 +30,13 @@ func writeSite(out, templates, workflows string, data *siteData) error {
 	return writePages(out, data)
 }
 
-// checkOut refuses an output directory that holds the repository.
+// checkOut refuses an output directory that holds the repository, or
+// that is held by it.
 //
 // The site source is written from scratch, so an output directory
-// that holds the workflows or the templates would take them with it.
+// that holds the workflows or the templates would take them with it,
+// and an output directory inside them would write the site into the
+// workflows it reads.
 func checkOut(out, templates, workflows string) error {
 	outAbs, err := filepath.Abs(out)
 	if err != nil {
@@ -42,8 +47,14 @@ func checkOut(out, templates, workflows string) error {
 		if err != nil {
 			continue
 		}
-		if outAbs == keepAbs || strings.HasPrefix(keepAbs, outAbs+string(filepath.Separator)) {
+		sep := string(filepath.Separator)
+		switch {
+		case outAbs == keepAbs:
+			return &usageError{reason: fmt.Sprintf("the output directory %s is %s", out, keep)}
+		case strings.HasPrefix(keepAbs, outAbs+sep):
 			return &usageError{reason: fmt.Sprintf("the output directory %s holds %s", out, keep)}
+		case strings.HasPrefix(outAbs, keepAbs+sep):
+			return &usageError{reason: fmt.Sprintf("the output directory %s is inside %s", out, keep)}
 		}
 	}
 	return nil
@@ -134,14 +145,22 @@ func writePages(out string, data *siteData) error {
 	}
 	for _, ns := range data.Namespaces {
 		pages = append(pages, page{
-			path:   ns + ".md",
-			fields: []string{"layout: namespace", "namespace: " + ns, "permalink: /" + ns + "/"},
+			path: ns + ".md",
+			fields: []string{
+				"layout: namespace",
+				"namespace: " + quoted(ns),
+				"permalink: " + quoted("/"+ns+"/"),
+			},
 		})
 	}
 	for _, rec := range data.Records {
 		pages = append(pages, page{
-			path:   rec.Namespace + "/" + rec.Name + ".md",
-			fields: []string{"layout: workflow", "address: " + rec.Address, "permalink: /" + rec.Address + "/"},
+			path: rec.Namespace + "/" + rec.Name + ".md",
+			fields: []string{
+				"layout: workflow",
+				"address: " + quoted(rec.Address),
+				"permalink: " + quoted("/"+rec.Address+"/"),
+			},
 		})
 	}
 	for _, p := range pages {
@@ -158,6 +177,49 @@ type page struct {
 	path string
 	// fields are the lines of the front matter of the page.
 	fields []string
+}
+
+// quoted quotes a value of the front matter when YAML would read it
+// as something else than a string.
+//
+// A namespace named "no" is a namespace named "no" and not the
+// boolean YAML reads in it. A value YAML reads as a string is left
+// alone, so the front matter of a page stays readable.
+func quoted(value string) string {
+	if !needsQuote(value) {
+		return value
+	}
+	escaped := strings.ReplaceAll(value, `\`, `\\`)
+	return `"` + strings.ReplaceAll(escaped, `"`, `\"`) + `"`
+}
+
+// needsQuote says whether YAML reads a value as something else than a
+// string.
+//
+// YAML reads a plain scalar as a boolean, as a number, as a date or as
+// nothing at all, and it gives a meaning of its own to some of the
+// characters.
+func needsQuote(value string) bool {
+	if value == "" {
+		return true
+	}
+	switch strings.ToLower(value) {
+	case "y", "n", "yes", "no", "true", "false", "on", "off", "null", "~":
+		return true
+	}
+	if _, err := strconv.ParseFloat(value, 64); err == nil {
+		return true
+	}
+	if _, err := strconv.ParseInt(value, 0, 64); err == nil {
+		return true
+	}
+	if _, err := time.Parse("2006-01-02", value); err == nil {
+		return true
+	}
+	if strings.ContainsAny(value[:1], "-?:,[]{}#&*!|>'\"%@`") {
+		return true
+	}
+	return strings.Contains(value, ": ") || strings.Contains(value, " #")
 }
 
 // writePage writes one page.

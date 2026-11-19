@@ -1,8 +1,8 @@
 <div class="card">
   <h3><a href="{{ '/' | append: workflow.address | append: '/' | relative_url }}">{{ workflow.title | escape }}</a></h3>
   <p class="address">
-    <code>{{ workflow.address }}</code>
-    <code>{{ workflow.identity }}</code>
+    <code>{{ workflow.address | escape }}</code>
+    <code>{{ workflow.identity | escape }}</code>
   </p>
   {% if workflow.summary != "" %}
   <p class="summary">{{ workflow.summary | escape }}</p>

@@ -9,7 +9,7 @@ layout: default
 {% endif %}
 {% for group in groups %}
 <section class="group">
-  <h2><a href="{{ '/' | append: group.name | append: '/' | relative_url }}">{{ group.name }}</a></h2>
+  <h2><a href="{{ '/' | append: group.name | append: '/' | relative_url }}">{{ group.name | escape }}</a></h2>
   <div class="cards">
     {% for workflow in group.items %}{% include workflow-card.html %}{% endfor %}
   </div>

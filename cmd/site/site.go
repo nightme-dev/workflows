@@ -34,6 +34,14 @@ const scriptExt = ".sh"
 // collides.
 var reservedPaths = []string{"assets", "changes", "pagefind"}
 
+// reservedNames are the names a namespace may not take because a page
+// of the site already has their file name.
+//
+// The page of a namespace is written to "<namespace>.md", and the
+// home page is written to "index.md": a namespace named "index"
+// would write over the home page.
+var reservedNames = []string{"index"}
+
 // bundle is one workflow directory of the repository.
 type bundle struct {
 	// namespace is the GitHub account name the workflow is published
@@ -47,9 +55,6 @@ type bundle struct {
 	// identity is "<namespace>-<name>": the name the workflow
 	// carries once it is installed.
 	identity string
-	// relPath is the path of the bundle relative to the workflows
-	// directory.
-	relPath string
 	// path is the path of the bundle relative to the root of the
 	// repository.
 	path string
@@ -165,15 +170,20 @@ func build(templates, workflowsRoot string, limit int) (*siteData, error) {
 	if err := checkDir(templates); err != nil {
 		return nil, err
 	}
-	bundles, err := readBundles(workflowsRoot)
+	if err := checkDir(workflowsRoot); err != nil {
+		return nil, err
+	}
+	// The history is opened first: it knows where the workflows live
+	// in the repository, and the links of the site are built from it.
+	hist, err := openHistory(workflowsRoot)
+	if err != nil {
+		return nil, err
+	}
+	bundles, err := readBundles(workflowsRoot, hist.workflows)
 	if err != nil {
 		return nil, err
 	}
 	if err := checkNamespaces(bundles); err != nil {
-		return nil, err
-	}
-	hist, err := openHistory(workflowsRoot)
-	if err != nil {
 		return nil, err
 	}
 	return buildSite(bundles, hist, limit)
@@ -218,7 +228,7 @@ func (b bundle) record(hist history) workflowRecord {
 		Source:     blobURL(b.path + "/" + workflowFile),
 		LastCommit: commitRecord{},
 	}
-	if commit, ok := hist.lastCommit(b.relPath); ok {
+	if commit, ok := hist.lastCommit(b.address); ok {
 		rec.LastCommit = commit
 	}
 	return rec
@@ -327,12 +337,11 @@ func kindOf(step wfe.Step) string {
 // A directory that holds no workflow file is not a bundle: the
 // validator is the one that reports it, the site has nothing to say
 // about it.
-func readBundles(root string) ([]bundle, error) {
+func readBundles(root, workflows string) ([]bundle, error) {
 	namespaces, err := readDir(root)
 	if err != nil {
 		return nil, err
 	}
-	workflows := filepath.Base(filepath.Clean(root))
 	var out []bundle
 	for _, ns := range namespaces {
 		names, err := readDir(filepath.Join(root, ns))
@@ -373,14 +382,12 @@ func readBundle(root, workflows, namespace, name string) (bundle, bool, error) {
 		// the site would say something the runtime does not do.
 		return bundle{}, false, &invalidError{reason: fmt.Sprintf("%s: %v", file, err)}
 	}
-	relPath := namespace + "/" + name
 	return bundle{
 		namespace: namespace,
 		name:      name,
-		address:   relPath,
+		address:   namespace + "/" + name,
 		identity:  namespace + "-" + name,
-		relPath:   relPath,
-		path:      filepath.ToSlash(filepath.Join(workflows, relPath)),
+		path:      filepath.ToSlash(filepath.Join(workflows, namespace, name)),
 		workflow:  wf,
 		summary:   readSummary(dir),
 		actions:   readActions(dir),
@@ -420,11 +427,11 @@ func firstParagraph(text string) string {
 
 // readActions returns the scripts a bundle ships.
 func readActions(dir string) []actionRecord {
+	out := []actionRecord{}
 	entries, err := os.ReadDir(filepath.Join(dir, actionsDir))
 	if err != nil {
-		return []actionRecord{}
+		return out
 	}
-	var out []actionRecord
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), scriptExt) {
 			continue
@@ -450,6 +457,13 @@ func checkNamespaces(bundles []bundle) error {
 				return &invalidError{reason: fmt.Sprintf(
 					"the namespace %q takes the root path %q of the site; a namespace may not be named %s",
 					b.namespace, reserved, strings.Join(reservedPaths, ", "))}
+			}
+		}
+		for _, reserved := range reservedNames {
+			if b.namespace == reserved {
+				return &invalidError{reason: fmt.Sprintf(
+					"the namespace %q takes the page %q of the site; a namespace may not be named %s",
+					b.namespace, reserved+".md", strings.Join(reservedNames, ", "))}
 			}
 		}
 	}

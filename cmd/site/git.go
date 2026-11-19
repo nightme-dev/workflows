@@ -119,7 +119,7 @@ func (h *gitHistory) changes(limit int) ([]changeRecord, error) {
 		return out, nil
 	}
 	log, err := runGit(h.root, "log", "-n", strconv.Itoa(limit),
-		"--format=%H%x09%h%x09%ad%x09%s", "--date=short", "--", h.workflows)
+		"--format=%H%x09%h%x09%ad%x09%P%x09%s", "--date=short", "--", h.workflows)
 	if err != nil {
 		return nil, &unreadableError{reason: fmt.Sprintf("the git history cannot be read: %v", err)}
 	}
@@ -127,13 +127,16 @@ func (h *gitHistory) changes(limit int) ([]changeRecord, error) {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
-		parts := strings.SplitN(line, "\t", 4)
-		if len(parts) < 4 {
+		parts := strings.SplitN(line, "\t", 5)
+		if len(parts) < 5 {
 			continue
 		}
-		sha, short, date, subject := parts[0], parts[1], parts[2], parts[3]
-		base := h.parent(sha)
-		diff, err := runGit(h.root, "diff", "--name-status", "--no-renames", base, sha, "--", h.workflows)
+		sha, short, date, parents, subject := parts[0], parts[1], parts[2], parts[3], parts[4]
+		base := parentOf(parents)
+		// The paths of a diff are quoted when they hold characters
+		// outside the ASCII: the quote would hide the path.
+		diff, err := runGit(h.root, "-c", "core.quotePath=false",
+			"diff", "--name-status", "--no-renames", base, sha, "--", h.workflows)
 		if err != nil {
 			return nil, &unreadableError{reason: fmt.Sprintf("the changes of %s cannot be read: %v", short, err)}
 		}
@@ -151,20 +154,18 @@ func (h *gitHistory) changes(limit int) ([]changeRecord, error) {
 	return out, nil
 }
 
-// parent returns the commit the commit grew out of.
+// parentOf returns the commit a commit grew out of.
 //
-// A commit that has no parent grew out of nothing: the diff against
-// the empty tree shows everything it holds.
-func (h *gitHistory) parent(sha string) string {
-	out, err := runGit(h.root, "rev-list", "--parents", "-n", "1", sha)
-	if err != nil {
+// The parents are the ones the history names: the first of them is
+// the one the commit grew out of. A commit that has no parent grew
+// out of nothing: the diff against the empty tree shows everything it
+// holds.
+func parentOf(parents string) string {
+	fields := strings.Fields(parents)
+	if len(fields) == 0 {
 		return emptyTree
 	}
-	fields := strings.Fields(strings.TrimSpace(out))
-	if len(fields) < 2 {
-		return emptyTree
-	}
-	return fields[1]
+	return fields[0]
 }
 
 // fileChange is one path a commit changed.

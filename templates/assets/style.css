@@ -68,6 +68,8 @@ pre code {
 
 .head {
   border-bottom: 1px solid var(--line);
+  margin: 0 auto;
+  max-width: 60rem;
   padding: 1.2rem 1.5rem 0.8rem;
 }
 
@@ -274,6 +276,7 @@ th {
   border-top: 1px solid var(--line);
   color: var(--muted);
   font-size: 0.85rem;
-  margin-top: 3rem;
+  margin: 3rem auto 0;
+  max-width: 60rem;
   padding: 1rem 1.5rem 2rem;
 }

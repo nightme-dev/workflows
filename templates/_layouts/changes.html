@@ -15,13 +15,13 @@ layout: default
     </p>
     <p class="subject">{{ change.subject | escape }}</p>
     {% if change.added.size > 0 %}
-    <p class="added">added: {% for address in change.added %}<a href="{{ '/' | append: address | append: '/' | relative_url }}"><code>{{ address }}</code></a>{% unless forloop.last %}, {% endunless %}{% endfor %}</p>
+    <p class="added">added: {% for address in change.added %}<a href="{{ '/' | append: address | append: '/' | relative_url }}"><code>{{ address | escape }}</code></a>{% unless forloop.last %}, {% endunless %}{% endfor %}</p>
     {% endif %}
     {% if change.modified.size > 0 %}
-    <p class="modified">changed: {% for address in change.modified %}<a href="{{ '/' | append: address | append: '/' | relative_url }}"><code>{{ address }}</code></a>{% unless forloop.last %}, {% endunless %}{% endfor %}</p>
+    <p class="modified">changed: {% for address in change.modified %}<a href="{{ '/' | append: address | append: '/' | relative_url }}"><code>{{ address | escape }}</code></a>{% unless forloop.last %}, {% endunless %}{% endfor %}</p>
     {% endif %}
     {% if change.removed.size > 0 %}
-    <p class="removed">removed: {% for address in change.removed %}<code>{{ address }}</code>{% unless forloop.last %}, {% endunless %}{% endfor %}</p>
+    <p class="removed">removed: {% for address in change.removed %}<code>{{ address | escape }}</code>{% unless forloop.last %}, {% endunless %}{% endfor %}</p>
     {% endif %}
   </li>
   {% endfor %}

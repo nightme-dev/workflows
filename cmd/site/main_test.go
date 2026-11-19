@@ -212,7 +212,7 @@ jobs:
 		t.Run(c.name, func(t *testing.T) {
 			tr := newTree(t)
 			tr.bundle("alice", "fix", c.workflow)
-			bundles, err := readBundles(tr.workflows())
+			bundles, err := readBundles(tr.workflows(), "workflows")
 			if err != nil {
 				t.Fatalf("readBundles: %v", err)
 			}
@@ -248,7 +248,7 @@ func TestTheKindOfAStep(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			tr := newTree(t)
 			tr.bundle("alice", "fix", "title: a workflow\njobs:\n  ship:\n    steps:\n      - id: fix\n        "+c.step+"\n")
-			bundles, err := readBundles(tr.workflows())
+			bundles, err := readBundles(tr.workflows(), "workflows")
 			if err != nil {
 				t.Fatalf("readBundles: %v", err)
 			}
@@ -278,7 +278,7 @@ func TestTheRoundsOfAJob(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			tr := newTree(t)
 			tr.bundle("alice", "fix", "title: a workflow\njobs:\n"+c.job+"    steps:\n      - id: fix\n        message: hello\n")
-			bundles, err := readBundles(tr.workflows())
+			bundles, err := readBundles(tr.workflows(), "workflows")
 			if err != nil {
 				t.Fatalf("readBundles: %v", err)
 			}
@@ -328,7 +328,7 @@ func TestTheSummaryIsTheFirstParagraph(t *testing.T) {
 			if c.readme != "" {
 				tr.readme("alice", "fix", c.readme)
 			}
-			bundles, err := readBundles(tr.workflows())
+			bundles, err := readBundles(tr.workflows(), "workflows")
 			if err != nil {
 				t.Fatalf("readBundles: %v", err)
 			}
@@ -346,7 +346,7 @@ func TestTheActionsOfABundle(t *testing.T) {
 	tr.bundle("alice", "fix", siteWorkflow)
 	tr.script("alice", "fix", "nightme-alice-report.sh")
 	tr.script("alice", "fix", "notes.txt")
-	bundles, err := readBundles(tr.workflows())
+	bundles, err := readBundles(tr.workflows(), "workflows")
 	if err != nil {
 		t.Fatalf("readBundles: %v", err)
 	}
@@ -357,6 +357,27 @@ func TestTheActionsOfABundle(t *testing.T) {
 	}
 	if record.Actions[0] != want[0] {
 		t.Errorf("the action is %+v, want %+v", record.Actions[0], want[0])
+	}
+}
+
+// TestABundleWithoutActionsShipsNone checks that a bundle without
+// actions ships none.
+//
+// The list is a list and not nothing: the data is read by other
+// programs too.
+func TestABundleWithoutActionsShipsNone(t *testing.T) {
+	tr := newTree(t)
+	tr.bundle("alice", "fix", siteWorkflow)
+	bundles, err := readBundles(tr.workflows(), "workflows")
+	if err != nil {
+		t.Fatalf("readBundles: %v", err)
+	}
+	record := recordOf(t, siteOf(t, bundles, noHistory), "alice/fix")
+	if record.Actions == nil {
+		t.Error("the actions of the bundle are nothing, want an empty list")
+	}
+	if len(record.Actions) != 0 {
+		t.Errorf("the bundle ships %d actions, want none", len(record.Actions))
 	}
 }
 
@@ -381,7 +402,7 @@ jobs:
       - id: mike
         message: hello
 `)
-	bundles, err := readBundles(tr.workflows())
+	bundles, err := readBundles(tr.workflows(), "workflows")
 	if err != nil {
 		t.Fatalf("readBundles: %v", err)
 	}
@@ -403,7 +424,7 @@ func TestTheWorkflowsAreSortedByAddress(t *testing.T) {
 	tr.bundle("zulu", "fix", siteWorkflow)
 	tr.bundle("alice", "fix", siteWorkflow)
 	tr.bundle("alice", "alpha", siteWorkflow)
-	bundles, err := readBundles(tr.workflows())
+	bundles, err := readBundles(tr.workflows(), "workflows")
 	if err != nil {
 		t.Fatalf("readBundles: %v", err)
 	}
@@ -466,6 +487,70 @@ func TestTheReservedNamespacesAreRefused(t *testing.T) {
 			}
 			if !strings.Contains(errOut, reserved) {
 				t.Errorf("the error does not name the namespace %q:\n%s", reserved, errOut)
+			}
+		})
+	}
+}
+
+// TestTheReservedNamesAreRefused checks the namespaces that take the
+// name of a page of the site.
+//
+// The page of a namespace is written to "<namespace>.md", and the
+// home page is written to "index.md": a namespace named "index"
+// would write over the home page.
+func TestTheReservedNamesAreRefused(t *testing.T) {
+	for _, reserved := range reservedNames {
+		t.Run(reserved, func(t *testing.T) {
+			tr := newTree(t)
+			tr.bundle(reserved, "fix", siteWorkflow)
+			tr.templates()
+			tr.init()
+			tr.commit("add the workflow")
+			t.Chdir(tr.dir)
+			code, _, errOut := runProgram(t)
+			if code != exitInvalid {
+				t.Errorf("the namespace %q exits %d, want %d:\n%s", reserved, code, exitInvalid, errOut)
+			}
+			if !strings.Contains(errOut, reserved) {
+				t.Errorf("the error does not name the namespace %q:\n%s", reserved, errOut)
+			}
+		})
+	}
+}
+
+// TestTheFrontMatterQuotesWhatYAMLWouldReadAsSomethingElse checks the
+// front matter of a page.
+//
+// A namespace named "no" is a namespace named "no" and not the
+// boolean YAML reads in it.
+func TestTheFrontMatterQuotesWhatYAMLWouldReadAsSomethingElse(t *testing.T) {
+	cases := []struct {
+		name string
+		ns   string
+		want string
+	}{
+		{name: "a name YAML reads as a string is left alone", ns: "alice", want: "namespace: alice\n"},
+		{name: "a name YAML reads as a boolean is quoted", ns: "no", want: "namespace: \"no\"\n"},
+		{name: "a name YAML reads as a number is quoted", ns: "123", want: "namespace: \"123\"\n"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			tr := newTree(t)
+			tr.templates()
+			tr.bundle(c.ns, "fix", siteWorkflow)
+			tr.init()
+			tr.commit("add the workflow")
+			t.Chdir(tr.dir)
+			code, _, errOut := runProgram(t)
+			if code != exitOK {
+				t.Fatalf("the program exits %d, want %d:\n%s", code, exitOK, errOut)
+			}
+			raw, err := os.ReadFile(filepath.Join(tr.dir, "docs", c.ns+".md"))
+			if err != nil {
+				t.Fatalf("read the page: %v", err)
+			}
+			if !strings.Contains(string(raw), c.want) {
+				t.Errorf("the front matter does not hold %q:\n%s", c.want, raw)
 			}
 		})
 	}
@@ -645,7 +730,7 @@ func TestTheProgramFailsOnAMissingTemplateDirectory(t *testing.T) {
 // TestTheProgramRefusesToOverwriteTheRepository checks that the site
 // source cannot be written over the workflows or the templates.
 func TestTheProgramRefusesToOverwriteTheRepository(t *testing.T) {
-	for _, out := range []string{"workflows", "templates", "."} {
+	for _, out := range []string{"workflows", "templates", ".", "workflows/alice", "templates/_layouts"} {
 		t.Run(out, func(t *testing.T) {
 			tr := newTree(t)
 			tr.templates()

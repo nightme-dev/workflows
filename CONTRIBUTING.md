@@ -174,6 +174,12 @@ scratch every time, and the page of a workflow that no longer exists is
 simply not there. The layout of the site is reviewed like everything else: a
 change of the templates is a pull request.
 
+Four names are reserved for the pages of the site itself: `assets`,
+`changes`, `pagefind` and `index`. A workflow published under one of them
+has nowhere to go — the site would have two pages at the same address — so
+the generator refuses it and the site is not built. Any other namespace is
+free, as before.
+
 ## The CI pipeline
 
 The CI pipeline runs one job: the validator. It also runs the tests of the

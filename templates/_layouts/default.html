@@ -6,6 +6,10 @@
     {% if page.address %}
       {% assign workflow = site.data.workflows | where: "address", page.address | first %}
       <title>{% if workflow %}{{ workflow.title | escape }} · {% endif %}{{ site.title }}</title>
+    {% elsif page.namespace %}
+      <title>{{ page.namespace | escape }} · {{ site.title }}</title>
+    {% elsif page.layout == "changes" %}
+      <title>Changes · {{ site.title }}</title>
     {% else %}
       <title>{{ site.title }}</title>
     {% endif %}
@@ -18,7 +22,7 @@
       {% include nav.html %}
       {% include search.html %}
     </header>
-    <main class="main">
+    <main class="main" data-pagefind-body>
       {{ content }}
     </main>
     <footer class="foot">
