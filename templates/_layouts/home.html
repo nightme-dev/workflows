@@ -1,0 +1,17 @@
+---
+layout: default
+---
+<h1>{{ site.title }}</h1>
+<p class="lead">{{ site.description }}</p>
+{% assign groups = site.data.workflows | group_by: "namespace" %}
+{% if groups.size == 0 %}
+<p class="empty">No workflow has been published yet.</p>
+{% endif %}
+{% for group in groups %}
+<section class="group">
+  <h2><a href="{{ '/' | append: group.name | append: '/' | relative_url }}">{{ group.name | escape }}</a></h2>
+  <div class="cards">
+    {% for workflow in group.items %}{% include workflow-card.html %}{% endfor %}
+  </div>
+</section>
+{% endfor %}

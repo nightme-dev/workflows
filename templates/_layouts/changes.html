@@ -1,0 +1,28 @@
+---
+layout: default
+---
+<h1>Changes</h1>
+<p class="lead">The commits that touched the workflows, the newest first.</p>
+{% if site.data.changes.size == 0 %}
+<p class="empty">No change has been recorded yet.</p>
+{% endif %}
+<ol class="changes">
+  {% for change in site.data.changes %}
+  <li>
+    <p class="commit">
+      <a href="{{ change.url }}"><code>{{ change.sha }}</code></a>
+      <span class="date">{{ change.date }}</span>
+    </p>
+    <p class="subject">{{ change.subject | escape }}</p>
+    {% if change.added.size > 0 %}
+    <p class="added">added: {% for address in change.added %}<a href="{{ '/' | append: address | append: '/' | relative_url }}"><code>{{ address | escape }}</code></a>{% unless forloop.last %}, {% endunless %}{% endfor %}</p>
+    {% endif %}
+    {% if change.modified.size > 0 %}
+    <p class="modified">changed: {% for address in change.modified %}<a href="{{ '/' | append: address | append: '/' | relative_url }}"><code>{{ address | escape }}</code></a>{% unless forloop.last %}, {% endunless %}{% endfor %}</p>
+    {% endif %}
+    {% if change.removed.size > 0 %}
+    <p class="removed">removed: {% for address in change.removed %}<code>{{ address | escape }}</code>{% unless forloop.last %}, {% endunless %}{% endfor %}</p>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ol>

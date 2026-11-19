@@ -1,0 +1,20 @@
+<div class="search">
+  <div id="search"></div>
+</div>
+<script src="{{ '/pagefind/pagefind-ui.js' | relative_url }}"></script>
+<script>
+  // The search box of every page. The index is built by Pagefind
+  // after the site is built, and the UI of Pagefind is what shows
+  // the results.
+  window.addEventListener('DOMContentLoaded', function () {
+    if (!window.PagefindUI) {
+      return;
+    }
+    new window.PagefindUI({
+      element: '#search',
+      placeholder: 'Search the workflows',
+      showImages: false,
+      resetStyles: false,
+    });
+  });
+</script>

@@ -1,0 +1,163 @@
+---
+layout: default
+---
+{% assign workflow = site.data.workflows | where: "address", page.address | first %}
+{% if workflow == nil %}
+<p class="empty">This workflow is not in the index.</p>
+{% else %}
+<h1>{{ workflow.title | escape }}</h1>
+<p class="address">
+  <code>{{ workflow.address | escape }}</code>
+  <code>{{ workflow.identity | escape }}</code>
+  {% if workflow.instruct %}<span class="tag">the messages are instructions to the agent</span>{% endif %}
+</p>
+<p class="source">
+  <a href="{{ workflow.source }}">the workflow file</a>
+</p>
+{% if workflow.summary != "" %}
+<section class="summary">
+  <p>{{ workflow.summary | escape }}</p>
+</section>
+{% endif %}
+{% if workflow.args.size > 0 %}
+<section>
+  <h2>Arguments</h2>
+  <table>
+    <thead>
+      <tr><th>name</th><th>default</th><th>required</th></tr>
+    </thead>
+    <tbody>
+      {% for argument in workflow.args %}
+      <tr>
+        <td><code>{{ argument.name | escape }}</code></td>
+        <td><code>{{ argument.default | escape }}</code></td>
+        <td>{% if argument.required %}yes{% else %}no{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+{% if workflow.on.schedule or workflow.on.pull_request or workflow.on.branch or workflow.on.issue or workflow.on.mention %}
+<section>
+  <h2>Triggers</h2>
+  <ul class="triggers">
+    {% if workflow.on.schedule %}
+      {% for entry in workflow.on.schedule %}
+      <li><code>schedule</code> — <code>{{ entry.cron | escape }}</code></li>
+      {% endfor %}
+    {% endif %}
+    {% if workflow.on.pull_request %}
+    <li>
+      <code>pull_request</code>
+      {% if workflow.on.pull_request.branches %} — branches: {% for branch in workflow.on.pull_request.branches %}<code>{{ branch | escape }}</code>{% unless forloop.last %}, {% endunless %}{% endfor %}{% endif %}
+      {% if workflow.on.pull_request.events %} — events: {% for event in workflow.on.pull_request.events %}<code>{{ event | escape }}</code>{% unless forloop.last %}, {% endunless %}{% endfor %}{% endif %}
+    </li>
+    {% endif %}
+    {% if workflow.on.branch %}
+    <li>
+      <code>branch</code>
+      {% if workflow.on.branch.patterns %} — patterns: {% for pattern in workflow.on.branch.patterns %}<code>{{ pattern | escape }}</code>{% unless forloop.last %}, {% endunless %}{% endfor %}{% endif %}
+      {% if workflow.on.branch.events %} — events: {% for event in workflow.on.branch.events %}<code>{{ event | escape }}</code>{% unless forloop.last %}, {% endunless %}{% endfor %}{% endif %}
+    </li>
+    {% endif %}
+    {% if workflow.on.issue %}
+    <li>
+      <code>issue</code>
+      {% if workflow.on.issue.events %} — events: {% for event in workflow.on.issue.events %}<code>{{ event | escape }}</code>{% unless forloop.last %}, {% endunless %}{% endfor %}{% endif %}
+    </li>
+    {% endif %}
+    {% if workflow.on.mention %}
+    <li>
+      <code>mention</code>
+      {% if workflow.on.mention.commands %} — commands: {% for command in workflow.on.mention.commands %}<code>{{ command | escape }}</code>{% unless forloop.last %}, {% endunless %}{% endfor %}{% else %} — any mention{% endif %}
+    </li>
+    {% endif %}
+  </ul>
+</section>
+{% endif %}
+{% if workflow.workspaces.size > 0 %}
+<section>
+  <h2>Workspaces</h2>
+  <ul class="workspaces">
+    {% for workspace in workflow.workspaces %}
+    <li><code>{{ workspace | escape }}</code></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% if workflow.jobs.size > 0 %}
+<section>
+  <h2>Jobs</h2>
+  {% for job in workflow.jobs %}
+  <div class="job">
+    <h3><code>{{ job.name | escape }}</code></h3>
+    <p class="meta">
+      {% if job.iterations == 0 %}runs until the run ends{% elsif job.iterations == 1 %}one round{% else %}{{ job.iterations }} rounds{% endif %}
+      {% if job.needs.size > 0 %} · needs: {% for need in job.needs %}<code>{{ need | escape }}</code>{% unless forloop.last %}, {% endunless %}{% endfor %}{% endif %}
+      {% if job.if != "" %} · if: <code>{{ job.if | escape }}</code>{% endif %}
+    </p>
+    <table class="steps">
+      <thead>
+        <tr><th>id</th><th>kind</th><th>step</th><th>note</th></tr>
+      </thead>
+      <tbody>
+        {% for step in job.steps %}
+        <tr>
+          <td>
+            <code>{{ step.id | escape }}</code>
+            {% if step.final %}<span class="tag">final</span>{% endif %}
+          </td>
+          <td><code>{{ step.kind | escape }}</code></td>
+          <td>
+            {% if step.if != "" %}<p class="if">if <code>{{ step.if | escape }}</code></p>{% endif %}
+            {% if step.kind == "message" %}
+            <pre>{{ step.message | escape }}</pre>
+            {% elsif step.kind == "shell" %}
+            <pre>{{ step.shell | escape }}</pre>
+            {% elsif step.kind == "use" %}
+            <pre>{{ step.use | escape }}</pre>
+            {% if step.with.size > 0 %}
+            <pre>{% for pair in step.with %}{{ pair[0] | escape }}: {{ pair[1] | escape }}
+{% endfor %}</pre>
+            {% endif %}
+            {% elsif step.kind == "wait" %}
+            <pre>{{ step.wait | escape }}</pre>
+            {% endif %}
+            {% if step.env.size > 0 %}
+            <pre>{% for pair in step.env %}{{ pair[0] | escape }}: {{ pair[1] | escape }}
+{% endfor %}</pre>
+            {% endif %}
+          </td>
+          <td>{{ step.note | escape }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+{% if workflow.actions.size > 0 %}
+<section>
+  <h2>Actions</h2>
+  <ul class="actions">
+    {% for action in workflow.actions %}
+    <li><code>{{ action.name | escape }}</code> — <code>{{ action.path | escape }}</code></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+<section class="last">
+  <h2>Last change</h2>
+  {% if workflow.last_commit.sha %}
+  <p>
+    <a href="{{ workflow.last_commit.url }}"><code>{{ workflow.last_commit.sha }}</code></a>
+    <span class="date">{{ workflow.last_commit.date }}</span>
+    — {{ workflow.last_commit.subject | escape }}
+  </p>
+  {% else %}
+  <p class="empty">The history does not say.</p>
+  {% endif %}
+</section>
+{% endif %}

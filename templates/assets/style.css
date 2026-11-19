@@ -1,0 +1,282 @@
+/* The style of the workflow index.
+ *
+ * The site is plain HTML: the styles live here, in the repository, and
+ * a change of them is a change of the templates and of nothing else.
+ */
+
+:root {
+  --ink: #1a1d21;
+  --muted: #5b6472;
+  --line: #e3e6ea;
+  --paper: #ffffff;
+  --wash: #f6f7f9;
+  --link: #1f5fbf;
+  --code: #f2f4f7;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  color: var(--ink);
+  background: var(--paper);
+  font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", sans-serif;
+}
+
+a {
+  color: var(--link);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+code,
+pre {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+  font-size: 0.9em;
+}
+
+code {
+  background: var(--code);
+  border-radius: 3px;
+  padding: 0.1em 0.35em;
+}
+
+pre {
+  background: var(--code);
+  border-radius: 4px;
+  margin: 0.4em 0;
+  overflow-x: auto;
+  padding: 0.6em 0.8em;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+pre code {
+  background: none;
+  padding: 0;
+}
+
+/* The head holds the brand, the navigation and the search. */
+
+.head {
+  border-bottom: 1px solid var(--line);
+  margin: 0 auto;
+  max-width: 60rem;
+  padding: 1.2rem 1.5rem 0.8rem;
+}
+
+.brand {
+  color: var(--ink);
+  display: inline-block;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.2rem;
+  margin: 0.8rem 0;
+}
+
+.nav > a {
+  font-weight: 600;
+}
+
+.nav-group {
+  border-left: 2px solid var(--line);
+  padding-left: 0.8rem;
+}
+
+.nav-namespace {
+  font-weight: 600;
+}
+
+.nav-group ul {
+  list-style: none;
+  margin: 0.3rem 0 0;
+  padding: 0;
+}
+
+.nav-group li {
+  font-size: 0.92rem;
+  padding: 0.1rem 0;
+}
+
+.search {
+  margin: 0.4rem 0 0.6rem;
+}
+
+/* The body of the pages. */
+
+.main {
+  margin: 0 auto;
+  max-width: 60rem;
+  padding: 1.5rem;
+}
+
+h1 {
+  font-size: 1.7rem;
+  line-height: 1.3;
+  margin: 0.6rem 0;
+}
+
+h2 {
+  border-bottom: 1px solid var(--line);
+  font-size: 1.2rem;
+  margin: 2rem 0 0.8rem;
+  padding-bottom: 0.3rem;
+}
+
+h3 {
+  font-size: 1rem;
+  margin: 0.4rem 0;
+}
+
+.lead {
+  color: var(--muted);
+  margin-top: 0;
+}
+
+.empty {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.address code + code {
+  margin-left: 0.4rem;
+}
+
+.tag {
+  background: var(--wash);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  margin-left: 0.4rem;
+  padding: 0.1rem 0.5rem;
+  white-space: nowrap;
+}
+
+.summary {
+  border-left: 3px solid var(--line);
+  color: var(--muted);
+  padding-left: 0.8rem;
+}
+
+/* The cards of the home page and of the namespace pages. */
+
+.cards {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+}
+
+.card {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.8rem 1rem;
+}
+
+.card h3 {
+  margin-top: 0;
+}
+
+.card .date,
+.date {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* The tables of the workflow page. */
+
+table {
+  border-collapse: collapse;
+  margin: 0.6rem 0 1.2rem;
+  width: 100%;
+}
+
+th,
+td {
+  border-bottom: 1px solid var(--line);
+  padding: 0.4rem 0.5rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  color: var(--muted);
+  font-size: 0.8rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.job {
+  margin-bottom: 1.5rem;
+}
+
+.job .meta {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0.2rem 0 0.6rem;
+}
+
+.triggers,
+.workspaces,
+.actions {
+  list-style: none;
+  padding: 0;
+}
+
+.triggers li,
+.workspaces li,
+.actions li {
+  padding: 0.15rem 0;
+}
+
+/* The changes page. */
+
+.changes {
+  list-style: none;
+  padding: 0;
+}
+
+.changes > li {
+  border-bottom: 1px solid var(--line);
+  padding: 0.8rem 0;
+}
+
+.changes p {
+  margin: 0.2rem 0;
+}
+
+.changes .subject {
+  font-weight: 600;
+}
+
+.added,
+.modified,
+.removed {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* The foot of every page. */
+
+.foot {
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 3rem auto 0;
+  max-width: 60rem;
+  padding: 1rem 1.5rem 2rem;
+}

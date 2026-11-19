@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    {% if page.address %}
+      {% assign workflow = site.data.workflows | where: "address", page.address | first %}
+      <title>{% if workflow %}{{ workflow.title | escape }} · {% endif %}{{ site.title }}</title>
+    {% elsif page.namespace %}
+      <title>{{ page.namespace | escape }} · {{ site.title }}</title>
+    {% elsif page.layout == "changes" %}
+      <title>Changes · {{ site.title }}</title>
+    {% else %}
+      <title>{{ site.title }}</title>
+    {% endif %}
+    <link rel="stylesheet" href="{{ '/assets/style.css' | relative_url }}" />
+    <link rel="stylesheet" href="{{ '/pagefind/pagefind-ui.css' | relative_url }}" />
+  </head>
+  <body>
+    <header class="head">
+      <a class="brand" href="{{ '/' | relative_url }}">{{ site.title }}</a>
+      {% include nav.html %}
+      {% include search.html %}
+    </header>
+    <main class="main" data-pagefind-body>
+      {{ content }}
+    </main>
+    <footer class="foot">
+      <p>
+        The index of the workflows the nightme community publishes. Every
+        workflow is a directory of
+        <a href="https://github.com/nightme-dev/workflows">nightme-dev/workflows</a>.
+      </p>
+    </footer>
+  </body>
+</html>
