@@ -303,6 +303,7 @@ func TestTheSleepOfAJob(t *testing.T) {
 		{name: "no sleep is no gap", job: "  ship:\n", want: ""},
 		{name: "the sleep is the gap", job: "  ship:\n    sleep: 5m\n", want: "5m"},
 		{name: "a short gap is a gap", job: "  ship:\n    sleep: 30s\n", want: "30s"},
+		{name: "a gap of zero is no gap", job: "  ship:\n    sleep: 0s\n", want: ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

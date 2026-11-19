@@ -284,11 +284,22 @@ func jobsOf(wf *wfe.Workflow) []jobRecord {
 			Needs:      needs,
 			If:         job.If,
 			Iterations: job.Rounds(),
-			Sleep:      job.Sleep,
+			Sleep:      sleepOf(job),
 			Steps:      stepsOf(job.Steps),
 		})
 	}
 	return out
+}
+
+// sleepOf returns the gap between the rounds of a job.
+//
+// A gap of zero is no gap: the runtime waits nothing between its
+// rounds, so the site says nothing either.
+func sleepOf(job wfe.Job) string {
+	if job.Gap() <= 0 {
+		return ""
+	}
+	return job.Sleep
 }
 
 // stepsOf returns the steps of a job.

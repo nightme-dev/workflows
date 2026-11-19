@@ -44,7 +44,7 @@ jobs:
       - id: pr-fix
         message: |
           PR #${{ steps.pr-view.outputs.data.pr_number }} 有合并冲突。
-          在这个 worktree 里先 git fetch，再把它的 base 分支合并进当前分支。
+          在这个 worktree 里先 git fetch，再把它的 base 分支（${{ steps.pr-view.outputs.data.base_branch }}）合并进当前分支。
           解掉冲突，提交并推送，让这个 PR 变成可合并。
           不要关 PR，不要动 issue 的 label。
         if: ${{ steps.pr-view.outputs.data.conflict }}
