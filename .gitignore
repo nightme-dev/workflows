@@ -15,3 +15,6 @@
 
 # The built site, written by `bundle exec jekyll build`.
 /.site/
+
+# The site staged for the artifact of the Pages workflow.
+/site-out/

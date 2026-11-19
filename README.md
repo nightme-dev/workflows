@@ -87,7 +87,9 @@ and the questions a reviewer answers are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 The repository has an index: <https://nightme-dev.github.io/workflows/>. It
 is published by the CI on every push to `main` that touches a workflow or
-the site itself, so the index never has to be kept by hand.
+the site itself, so the index never has to be kept by hand. The CI puts the
+built site on the `gh-pages` branch, and that branch is what GitHub Pages
+serves.
 
 The site holds:
 
@@ -106,7 +108,7 @@ the layout: a change of the layout is a change of the templates and of
 nothing else. The generator is [`cmd/site`](cmd/site), and it reads the
 workflows with the same parser the validator uses.
 
-The site source and the built site are not in the repository. To see the
+The site source and the built site are not in this branch. To see the
 site locally, generate the source and serve it:
 
 ```sh

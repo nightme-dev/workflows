@@ -81,13 +81,24 @@ jobs:
           # the one the pages expect.
           npm install --global pagefind@1.4.0
           pagefind --site .site
-      - uses: actions/upload-pages-artifact@v3
+      - name: Stage the site
+        if: steps.changes.outputs.build == 'true'
+        run: |
+          set -euo pipefail
+          # The site is staged in a directory of its own: the artifact
+          # holds the files of the site and nothing around them.
+          cp -a .site site-out
+      - uses: actions/upload-artifact@v4
         if: steps.changes.outputs.build == 'true'
         with:
-          path: .site
+          # The site travels to the publish job as an archive: the job
+          # that publishes it never builds it.
+          name: site
+          path: site-out
+          retention-days: 1
 
-  deploy:
-    # The deploy job is the only job that holds the permissions the
+  publish:
+    # The publish job is the only job that holds the permissions the
     # publication needs: the build never holds a token that could
     # mint one.
     needs: build
@@ -95,17 +106,52 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      contents: write
     steps:
-      - uses: actions/configure-pages@v5
+      - uses: actions/checkout@v4
         with:
-          # The Pages site is enabled by the administrator of the
-          # repository; the workflow does not enable it.
-          enablement: false
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          # The credentials of the push: the job writes the site to a
+          # branch of this repository.
+          persist-credentials: true
+      - name: Check out the branch the site is published from
+        run: |
+          set -euo pipefail
+          if git fetch origin gh-pages; then
+            git checkout -B gh-pages FETCH_HEAD
+          else
+            # The branch does not exist yet: the site starts a branch
+            # of its own, with no history of the repository in it.
+            git checkout --orphan gh-pages
+            git rm -rq --ignore-unmatch . || true
+          fi
+      - name: Empty the branch
+        run: |
+          set -euo pipefail
+          # The branch holds the built site and nothing else: what the
+          # last build left behind goes away before the new site is put
+          # in its place, so a page that is no longer built is no
+          # longer served.
+          git rm -rq --ignore-unmatch . || true
+          git clean -fdx
+      - uses: actions/download-artifact@v4
+        with:
+          # The site is unpacked outside the branch: it is put on the
+          # branch by the next step, not by the unpacker.
+          name: site
+          path: ${{ runner.temp }}/site
+      - name: Put the site on the branch
+        run: |
+          set -euo pipefail
+          cp -a "${{ runner.temp }}/site"/. .
+          # The site is served as it is: the Jekyll build of the branch
+          # would try to build it a second time.
+          touch .nojekyll
+          git add -A
+          if git diff --cached --quiet; then
+            echo "the site did not change"
+            exit 0
+          fi
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -m "chore(pages): publish the site"
+          git push origin HEAD:gh-pages
