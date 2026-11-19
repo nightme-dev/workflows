@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    
+      <title>nightme workflows</title>
+    
+    <link rel="stylesheet" href="/workflows/assets/style.css" />
+    <link rel="stylesheet" href="/workflows/pagefind/pagefind-ui.css" />
+  </head>
+  <body>
+    <header class="head">
+      <a class="brand" href="/workflows/">nightme workflows</a>
+      <nav class="nav">
+  <a href="/workflows/">Home</a>
+  <a href="/workflows/changes/">Changes</a>
+  
+  
+  <div class="nav-group">
+    <a class="nav-namespace" href="/workflows/nightme/">nightme</a>
+    <ul>
+      
+      <li><a href="/workflows/nightme/coder/">自动挑选处于 open 状态的 nightme/assigned 的 issue，执行修复，review，并提交 PR</a></li>
+      
+    </ul>
+  </div>
+  
+</nav>
+
+      <div class="search">
+  <div id="search"></div>
+</div>
+<script src="/workflows/pagefind/pagefind-ui.js"></script>
+<script>
+  // The search box of every page. The index is built by Pagefind
+  // after the site is built, and the UI of Pagefind is what shows
+  // the results.
+  window.addEventListener('DOMContentLoaded', function () {
+    if (!window.PagefindUI) {
+      return;
+    }
+    new window.PagefindUI({
+      element: '#search',
+      placeholder: 'Search the workflows',
+      showImages: false,
+      resetStyles: false,
+    });
+  });
+</script>
+
+    </header>
+    <main class="main" data-pagefind-body>
+      <h1>nightme workflows</h1>
+<p class="lead">The workflows the nightme community publishes.</p>
+
+
+
+<section class="group">
+  <h2><a href="/workflows/nightme/">nightme</a></h2>
+  <div class="cards">
+    <div class="card">
+  <h3><a href="/workflows/nightme/coder/">自动挑选处于 open 状态的 nightme/assigned 的 issue，执行修复，review，并提交 PR</a></h3>
+  <p class="address">
+    <code>nightme/coder</code>
+    <code>nightme-coder</code>
+  </p>
+  
+  <p class="date">last change: 2026-11-19</p>
+</div>
+
+  </div>
+</section>
+
+
+    </main>
+    <footer class="foot">
+      <p>
+        The index of the workflows the nightme community publishes. Every
+        workflow is a directory of
+        <a href="https://github.com/nightme-dev/workflows">nightme-dev/workflows</a>.
+      </p>
+    </footer>
+  </body>
+</html>
