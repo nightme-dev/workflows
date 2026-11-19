@@ -147,7 +147,16 @@ jobs:
           # would try to build it a second time.
           touch .nojekyll
           git add -A
-          if git diff --cached --quiet; then
+          # The search index is not part of the comparison: the order
+          # of the pages in it is the order the filesystem hands the
+          # pages out in, so two builds of the same site do not have
+          # the same index though they hold the same words. The
+          # fragments of the index are compared: each of them is
+          # named after the content of the page it holds.
+          if git diff --cached --quiet -- . \
+               ':(exclude)pagefind/index' \
+               ':(exclude)pagefind/*.pf_meta' \
+               ':(exclude)pagefind/pagefind-entry.json'; then
             echo "the site did not change"
             exit 0
           fi
