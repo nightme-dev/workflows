@@ -194,10 +194,17 @@ local run. The tests of the validator run on every push and every pull
 request, whether a workflow changed or not.
 
 A second workflow publishes the site: it builds the index of the workflows,
-builds the site with Jekyll, builds the search index and publishes the
-result to GitHub Pages. It runs on a push to `main` that touches a workflow
-or the site itself, and on a manual run. A push that touches none of them
-skips it: the site that is published is the site of the last build.
+builds the site with Jekyll, builds the search index and puts the result on
+the `gh-pages` branch, which is the branch GitHub Pages serves. It runs on a
+push to `main` that touches a workflow or the site itself, and on a manual
+run. A push that touches none of them skips it: the site that is published
+is the site of the last build.
+
+The `gh-pages` branch is a branch of its own: it has no history of the
+repository in it, and it holds the built site and nothing else. The
+publishing job empties it before it puts the new site on it, so a page that
+is no longer built is no longer served. The branch is written by the CI
+alone, and the site is never written by hand.
 
 The pipeline is part of the repository like everything else: a pull request
 that changes it is reviewed like any other pull request, and the reviewer
