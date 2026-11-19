@@ -109,11 +109,15 @@ type argRecord struct {
 }
 
 // jobRecord is one job of a workflow.
+//
+// The sleep is the gap between two rounds of the job: a job that
+// names no gap has none, and its next round starts at once.
 type jobRecord struct {
 	Name       string       `json:"name"`
 	Needs      []string     `json:"needs"`
 	If         string       `json:"if"`
 	Iterations int          `json:"iterations"`
+	Sleep      string       `json:"sleep"`
 	Steps      []stepRecord `json:"steps"`
 }
 
@@ -280,6 +284,7 @@ func jobsOf(wf *wfe.Workflow) []jobRecord {
 			Needs:      needs,
 			If:         job.If,
 			Iterations: job.Rounds(),
+			Sleep:      job.Sleep,
 			Steps:      stepsOf(job.Steps),
 		})
 	}

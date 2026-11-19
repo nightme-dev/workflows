@@ -290,6 +290,36 @@ func TestTheRoundsOfAJob(t *testing.T) {
 	}
 }
 
+// TestTheSleepOfAJob checks what the sleep of a job becomes.
+//
+// The sleep is the gap between two rounds of the job. A job that
+// names no gap has none: its next round starts at once.
+func TestTheSleepOfAJob(t *testing.T) {
+	cases := []struct {
+		name string
+		job  string
+		want string
+	}{
+		{name: "no sleep is no gap", job: "  ship:\n", want: ""},
+		{name: "the sleep is the gap", job: "  ship:\n    sleep: 5m\n", want: "5m"},
+		{name: "a short gap is a gap", job: "  ship:\n    sleep: 30s\n", want: "30s"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			tr := newTree(t)
+			tr.bundle("alice", "fix", "title: a workflow\njobs:\n"+c.job+"    steps:\n      - id: fix\n        message: hello\n")
+			bundles, err := readBundles(tr.workflows(), "workflows")
+			if err != nil {
+				t.Fatalf("readBundles: %v", err)
+			}
+			record := recordOf(t, siteOf(t, bundles, noHistory), "alice/fix")
+			if got := record.Jobs[0].Sleep; got != c.want {
+				t.Errorf("the job waits %q between its rounds, want %q", got, c.want)
+			}
+		})
+	}
+}
+
 // TestTheSummaryIsTheFirstParagraph checks what the README becomes.
 //
 // The first paragraph is the first block of text that is not a

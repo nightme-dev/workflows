@@ -96,6 +96,7 @@ layout: default
       {% if job.iterations == 0 %}runs until the run ends{% elsif job.iterations == 1 %}one round{% else %}{{ job.iterations }} rounds{% endif %}
       {% if job.needs.size > 0 %} · needs: {% for need in job.needs %}<code>{{ need | escape }}</code>{% unless forloop.last %}, {% endunless %}{% endfor %}{% endif %}
       {% if job.if != "" %} · if: <code>{{ job.if | escape }}</code>{% endif %}
+      {% if job.sleep != "" %} · sleep: <code>{{ job.sleep | escape }}</code>{% endif %}
     </p>
     <table class="steps">
       <thead>
