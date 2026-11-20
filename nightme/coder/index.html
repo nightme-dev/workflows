@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     
       
-      <title>自动挑选处于 open 状态的 nightme/assigned 的 issue，执行修复，review，并提交 PR · nightme workflows</title>
+      <title>每轮把 nightme/assigned 队列里的一个 issue 修好、review 过并处理 findings，开成一个能合的 PR。 · nightme workflows</title>
     
     <link rel="stylesheet" href="/workflows/assets/style.css" />
     <link rel="stylesheet" href="/workflows/pagefind/pagefind-ui.css" />
@@ -22,7 +22,7 @@
     <a class="nav-namespace" href="/workflows/nightme/">nightme</a>
     <ul>
       
-      <li><a href="/workflows/nightme/coder/">自动挑选处于 open 状态的 nightme/assigned 的 issue，执行修复，review，并提交 PR</a></li>
+      <li><a href="/workflows/nightme/coder/">每轮把 nightme/assigned 队列里的一个 issue 修好、review 过并处理 findings，开成一个能合的 PR。</a></li>
       
     </ul>
   </div>
@@ -54,7 +54,7 @@
     <main class="main" data-pagefind-body>
       
 
-<h1>自动挑选处于 open 状态的 nightme/assigned 的 issue，执行修复，review，并提交 PR</h1>
+<h1>每轮把 nightme/assigned 队列里的一个 issue 修好、review 过并处理 findings，开成一个能合的 PR。</h1>
 <p class="address">
   <code>nightme/coder</code>
   <code>nightme-coder</code>
@@ -116,7 +116,7 @@
             
             
           </td>
-          <td>挑一个 nightme/assigned 队列里的 issue 交给 agent 修。只有 data.issue 有值，后面的步骤才跑。</td>
+          <td>从 nightme/assigned 队列里挑一个 issue 交给 agent 修。挑不到（data.issue 为空）这轮就没活干，后面的步骤都跳过。</td>
         </tr>
         
         <tr>
@@ -132,7 +132,7 @@
             
             
           </td>
-          <td>提交 agent 的改动。不带 error 的 nothing_to_commit（活已经提交过）正常；带 error 是真没东西可提交：instruct 让 agent 改，改完 resume 这一步。</td>
+          <td>提交 agent 的改动。真没东西可提交时 instruct 让 agent 改，改完 resume 这一步。</td>
         </tr>
         
         <tr>
@@ -148,7 +148,23 @@
             
             
           </td>
-          <td>review 本分支与 base 的差异。链 [omp, codex] 自动降级，history 里出现 /review -a codex 即已降级。跑一半断了别 resume（resume 重发 -a omp，丢掉 -c 的续跑记录），instruct 当前 agent 发 /review -c。no_diff：instruct 让 agent 真改；base_unknown：先弄清 base；already_running：wait 一下再看。</td>
+          <td>review 本分支与 base 的差异，findings 回到聊天里。链 [omp, codex] 自己降级，不用你手动降级。 只有 outcome 带 unfinished（还有组没跑完）时才走 /review --continue 那一步；重跑本步是一次全新的整审，白做。 no_diff 是异常：fix 本该改出了东西，分支却和 base 一样 —— instruct 让 agent 真正改出来，再跑 commit 和 review； base_unknown 是 base 分支没解析出来，也什么都没 review，先弄清 base 再跑 review；already_running 就用 wait 等它结束再看。</td>
+        </tr>
+        
+        <tr>
+          <td>
+            <code>review-continue</code>
+            
+          </td>
+          <td><code>message</code></td>
+          <td>
+            <p class="if">if <code>${{ steps.review.outputs.data.unfinished }}</code></p>
+            
+            <pre>/review --continue</pre>
+            
+            
+          </td>
+          <td>review 的链降级过一轮之后还有组没跑完时，用它收尾：/review --continue 拿本 chat 上一次 review 的记录， 用最后一个 agent 续那些没跑完的组（跑到过 agent 的组续 session，没跑到的重放存下来的 prompt）。 每组只有一次恢复额度，这步失败就用完了。报 no review to continue（daemon 重启过、记录没了）就别再试续跑，让 chat 模型 next 掉本步继续往下走。</td>
         </tr>
         
         <tr>
@@ -180,7 +196,7 @@
             
             
           </td>
-          <td>推送分支。不带 error 的 nothing_to_push（已经在远端）正常；带 error 是本地还有没推的：instruct 让 agent 提交后 resume 这一步。</td>
+          <td>推送分支。本地还有没推的提交时 instruct 让 agent 提交后 resume 这一步。</td>
         </tr>
         
         <tr>
@@ -196,7 +212,7 @@
             
             
           </td>
-          <td>开 PR。--ready 把 issue 从 nightme/wip 换成 nightme/ready；label 改失败只出 ⚠️，不算异常。pr_exists 正常（PR 已开过）。no_remote_branch：instruct 让 agent 推；no_commits：instruct 让 agent 提交；改完 resume 这一步。</td>
+          <td>开 PR 并把 issue 标成 ready。no_remote_branch：instruct 让 agent 推；no_commits：instruct 让 agent 提交；改完 resume 这一步。</td>
         </tr>
         
         <tr>
@@ -228,7 +244,7 @@
             
             
           </td>
-          <td>看 PR 现在能不能合。conflict=1 表示有冲突，是正常分支（不带 error），下面的修复步骤据此决定。</td>
+          <td>看 PR 现在能不能合；conflict=1 是正常分支，下面的修复步骤据此处理。</td>
         </tr>
         
         <tr>
@@ -280,7 +296,7 @@
             
             
           </td>
-          <td>修完再查一次。还冲突就是没修好，本轮到此为止。</td>
+          <td>修完再查一次；还冲突就是没修好，本轮到此为止。</td>
         </tr>
         
         <tr>
@@ -296,7 +312,7 @@
             
             
           </td>
-          <td>回主仓库目录，下一轮的 fix 必须从 main 开始（worktree 里再 fix 会报 already_active）。final：轮次提前结束也照跑，保证 chat 回到主仓库。</td>
+          <td>回主仓库目录。下一轮的 fix 必须从 main 开始 —— worktree 里再 fix 会报 already_active。</td>
         </tr>
         
       </tbody>
@@ -310,9 +326,9 @@
   <h2>Last change</h2>
   
   <p>
-    <a href="https://github.com/nightme-dev/workflows/commit/f673db7"><code>f673db7</code></a>
+    <a href="https://github.com/nightme-dev/workflows/commit/0751ce8"><code>0751ce8</code></a>
     <span class="date">2026-11-20</span>
-    — feat(coder): 用 job sleep 替代 wait 步骤并添加 PR 冲突修复流程 (#12)
+    — feat(coder): 让 review 步与 continue 交接对齐 (#14)
   </p>
   
 </section>
