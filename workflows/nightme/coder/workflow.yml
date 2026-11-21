@@ -22,7 +22,8 @@ jobs:
         if: ${{ steps.fix.outputs.data.issue }}
         description: >-
           review 本分支与 base 的差异，findings 回到聊天里。链 [omp, codex] 自己降级：omp 留下没跑完的组时 codex 只接管那几组，不用你手动降级。
-          链用完了还有组没跑完（outcome 带 unfinished）时，用 ntm_review 工具跑 --continue：它用最后一个 agent 续剩下的组，每组只有一次恢复额度。
+          链用完了还有组没跑完（outcome 带 unfinished）时，别重跑本步 —— 重跑是一次全新的整审，白做。决定模型这时该选 escalate 把活交给 chat 模型，
+          chat 模型有 ntm_review 工具：跑 ntm_review(args="--continue") 就能用最后一个 agent 续剩下的组，每组只有一次恢复额度；报 no review to continue（记录没了）就别再试，往下走。
           no_diff 是异常：fix 本该改出了东西，分支却和 base 一样 —— instruct 让 agent 真正改出来，再跑 commit 和 review；
           base_unknown 是 base 分支没解析出来，也什么都没 review，先弄清 base 再跑 review；already_running 就用 wait 等它结束再看。
       - id: commit-revise
