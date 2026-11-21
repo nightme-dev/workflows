@@ -99,7 +99,7 @@
     </p>
     <table class="steps">
       <thead>
-        <tr><th>id</th><th>kind</th><th>step</th><th>note</th></tr>
+        <tr><th>id</th><th>kind</th><th>step</th><th>description</th></tr>
       </thead>
       <tbody>
         
@@ -148,23 +148,7 @@
             
             
           </td>
-          <td>review 本分支与 base 的差异，findings 回到聊天里。链 [omp, codex] 自己降级，不用你手动降级。 只有 outcome 带 unfinished（还有组没跑完）时才走 /review --continue 那一步；重跑本步是一次全新的整审，白做。 no_diff 是异常：fix 本该改出了东西，分支却和 base 一样 —— instruct 让 agent 真正改出来，再跑 commit 和 review； base_unknown 是 base 分支没解析出来，也什么都没 review，先弄清 base 再跑 review；already_running 就用 wait 等它结束再看。</td>
-        </tr>
-        
-        <tr>
-          <td>
-            <code>review-continue</code>
-            
-          </td>
-          <td><code>message</code></td>
-          <td>
-            <p class="if">if <code>${{ steps.review.outputs.data.unfinished }}</code></p>
-            
-            <pre>/review --continue</pre>
-            
-            
-          </td>
-          <td>review 的链降级过一轮之后还有组没跑完时，用它收尾：/review --continue 拿本 chat 上一次 review 的记录， 用最后一个 agent 续那些没跑完的组（跑到过 agent 的组续 session，没跑到的重放存下来的 prompt）。 每组只有一次恢复额度，这步失败就用完了。报 no review to continue（daemon 重启过、记录没了）就别再试续跑，让 chat 模型 next 掉本步继续往下走。</td>
+          <td>review 本分支与 base 的差异，findings 回到聊天里。链 [omp, codex] 自己降级：omp 留下没跑完的组时 codex 只接管那几组，不用你手动降级。 链用完了还有组没跑完（outcome 带 unfinished）时，别重跑本步 —— 重跑是一次全新的整审，白做。决定模型这时该选 escalate 把活交给 chat 模型， chat 模型有 ntm_review 工具：跑 ntm_review(args=&quot;--continue&quot;) 就能用最后一个 agent 续剩下的组，每组只有一次恢复额度；报 no review to continue（记录没了）就别再试，往下走。 no_diff 是异常：fix 本该改出了东西，分支却和 base 一样 —— instruct 让 agent 真正改出来，再跑 commit 和 review； base_unknown 是 base 分支没解析出来，也什么都没 review，先弄清 base 再跑 review；already_running 就用 wait 等它结束再看。</td>
         </tr>
         
         <tr>
@@ -326,9 +310,9 @@
   <h2>Last change</h2>
   
   <p>
-    <a href="https://github.com/nightme-dev/workflows/commit/0751ce8"><code>0751ce8</code></a>
-    <span class="date">2026-11-20</span>
-    — feat(coder): 让 review 步与 continue 交接对齐 (#14)
+    <a href="https://github.com/nightme-dev/workflows/commit/ee982f6"><code>ee982f6</code></a>
+    <span class="date">2026-11-21</span>
+    — feat(coder): 采用新 workflow schema 与链式 fallback (#16)
   </p>
   
 </section>
