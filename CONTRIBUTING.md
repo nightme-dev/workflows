@@ -158,7 +158,7 @@ What a workflow says on the site comes from the workflow itself:
 - the `on` block is the list of the triggers;
 - the `workspaces` are the directories the workflow runs in;
 - the `jobs` and their `steps` are the steps of the workflow, with their
-  notes.
+  descriptions.
 
 A bundle may also carry a `README.md`, and its **first paragraph** is the
 summary of the workflow on the site. The first paragraph is the first block

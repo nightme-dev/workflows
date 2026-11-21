@@ -127,17 +127,17 @@ type jobRecord struct {
 // step can be — a message, a shell command, an action, a wait — it
 // is. A step that is none of them has no kind.
 type stepRecord struct {
-	ID      string            `json:"id"`
-	Kind    string            `json:"kind"`
-	If      string            `json:"if"`
-	Env     map[string]string `json:"env"`
-	Note    string            `json:"note"`
-	Final   bool              `json:"final"`
-	Message string            `json:"message"`
-	Shell   string            `json:"shell"`
-	Use     string            `json:"use"`
-	With    map[string]any    `json:"with"`
-	Wait    string            `json:"wait"`
+	ID          string            `json:"id"`
+	Kind        string            `json:"kind"`
+	If          string            `json:"if"`
+	Env         map[string]string `json:"env"`
+	Description string            `json:"description"`
+	Final       bool              `json:"final"`
+	Message     string            `json:"message"`
+	Shell       string            `json:"shell"`
+	Use         string            `json:"use"`
+	With        map[string]any    `json:"with"`
+	Wait        string            `json:"wait"`
 }
 
 // actionRecord is one script a bundle ships.
@@ -307,17 +307,17 @@ func stepsOf(steps []wfe.Step) []stepRecord {
 	out := make([]stepRecord, 0, len(steps))
 	for _, step := range steps {
 		rec := stepRecord{
-			ID:      step.ID,
-			Kind:    kindOf(step),
-			If:      step.If,
-			Note:    step.Note,
-			Final:   step.Final,
-			Message: step.Message,
-			Shell:   step.Shell,
-			Use:     step.Use,
-			Wait:    step.Wait,
-			Env:     map[string]string{},
-			With:    map[string]any{},
+			ID:          step.ID,
+			Kind:        kindOf(step),
+			If:          step.If,
+			Description: step.Description,
+			Final:       step.Final,
+			Message:     step.Message,
+			Shell:       step.Shell,
+			Use:         step.Use,
+			Wait:        step.Wait,
+			Env:         map[string]string{},
+			With:        map[string]any{},
 		}
 		for name, value := range step.Env {
 			rec.Env[name] = value
