@@ -168,7 +168,7 @@
             
             
           </td>
-          <td>200：review 跑过了，agent/groups/findings/unfinished/delivered 说得出谁跑的、几组、几条 findings、还有几组没跑完、findings 有没有交到 agent 手里。 404：没有可 review 的差异——分支和 base 一样，让 agent 真的改出东西来，再跑 commit 和 review。 500：review 失败了；statusText 说的是 base 分支既读不到也修不好（先把 base 弄明白），还是 review 本身坏了。 501：这个 agent 没法 review，换一个能 review 的。 unfinished 大于 0：链用完了还有组没跑完——不要重跑本步，重跑是一次全新的整审；用 ntm_review --continue 接管剩下那几组。 429：上游被限流——run 停下来等操作员，不要重跑这一步。
+          <td>200：review 跑过了，agent/groups/findings/unfinished/delivered 说得出谁跑的、几组、几条 findings、还有几组没跑完、findings 有没有交到 agent 手里。 404：没有可 review 的差异——分支和 base 一样，让 agent 真的改出东西来，再跑 commit 和 review。 409：review 找到了 findings，但工作区既没有新提交也没有新改动——findings 没被处理。先看 transcript 分清两种：agent 判定这些 findings 不成立或不必要（没必要修），还是它没顾上改。 没必要修 → next 跳过本步：这一步记成跳过，findings 这些事实留着，流程从下一步继续（commit-revise 没有东西可提交，正常走完）→ push → pr。不要为了让 commit 有东西可提交而让 agent 去改。 需要修 → instruct 让 agent 改；改完 next 跳过本步（review 的活已经干完，它的结论留着），进入 commit-revise → push → pr。不要重跑本步：重跑是一次全新的整审。 500：review 失败了；statusText 说的是 base 分支既读不到也修不好（先把 base 弄明白），还是 review 本身坏了。 501：这个 agent 没法 review，换一个能 review 的。 unfinished 大于 0：链用完了还有组没跑完——不要重跑本步，重跑是一次全新的整审；用 ntm_review --continue 接管剩下那几组。 429：上游被限流——run 停下来等操作员，不要重跑这一步。
 </td>
         </tr>
         
@@ -185,7 +185,7 @@
             
             
           </td>
-          <td>200：改动提交了，branch/sha_range/commits/agent 说得出提交在哪、是哪一段、几个提交。 200 且 commits=0：真没东西可提交。 400：这里不是 git 仓库，或者没有工作区。 404：没有可以接着续的失败提交。 409：有没解完的冲突、HEAD 是游离的，或者 agent 根本没把活提交了——让 agent 把 worktree 收拾好，真的提交一次。 500：worktree 的状态读不到。 429：上游被限流——run 停下来等操作员，不要重跑这一步。
+          <td>200：改动提交了，branch/sha_range/commits/agent 说得出提交在哪、是哪一段、几个提交。 200 且 commits=0：真没东西可提交——review 判定没必要修时会走到这里，这是正常的，流程继续到 push；别让 agent 去改点什么。 400：这里不是 git 仓库，或者没有工作区。 404：没有可以接着续的失败提交。 409：有没解完的冲突、HEAD 是游离的，或者 agent 根本没把活提交了——让 agent 把 worktree 收拾好，真的提交一次。 500：worktree 的状态读不到。 429：上游被限流——run 停下来等操作员，不要重跑这一步。
 </td>
         </tr>
         
@@ -336,9 +336,9 @@
   <h2>Last change</h2>
   
   <p>
-    <a href="https://github.com/nightme-dev/workflows/commit/24c76d1"><code>24c76d1</code></a>
+    <a href="https://github.com/nightme-dev/workflows/commit/5165a0f"><code>5165a0f</code></a>
     <span class="date">2026-11-24</span>
-    — feat(coder): 为新结果契约重写 coder 工作流 (#18)
+    — docs(coder): 补充 review 409 状态与 commits=0 的说明 (#22)
   </p>
   
 </section>
