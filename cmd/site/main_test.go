@@ -250,6 +250,21 @@ func TestTheKindOfAStep(t *testing.T) {
 			want: "cmd",
 			cmd:  "skip",
 		},
+		{
+			// The runtime trims the name before it runs the command,
+			// so the site has to trim it too.
+			name: "a builtin command with spaces around its name",
+			step: "cmd:\n          name: \" skip \"",
+			want: "cmd",
+			cmd:  "skip",
+		},
+		{
+			// A cmd step may carry a message and name no command.
+			name: "a builtin command that names no command",
+			step: "cmd:\n          name: \"\"\n        message: hello",
+			want: "cmd",
+			cmd:  "",
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

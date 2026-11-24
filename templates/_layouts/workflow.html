@@ -126,7 +126,7 @@ layout: default
             <pre>{{ step.wait | escape }}</pre>
             {% elsif step.kind == "cmd" %}
             {% if step.message != "" %}<pre>{{ step.message | escape }}</pre>{% endif %}
-            <pre>{{ step.cmd | escape }}</pre>
+            {% if step.cmd != "" %}<pre>cmd: {{ step.cmd | escape }}</pre>{% endif %}
             {% endif %}
             {% if step.env.size > 0 %}
             <pre>{% for pair in step.env %}{{ pair[0] | escape }}: {{ pair[1] | escape }}

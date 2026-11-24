@@ -19,9 +19,12 @@ jobs:
           400：没有 issue 号，或者没有工作区。
           404：这个 issue 不存在。
           409：世界挡着——issue 被别的 agent 占了（label 是 nightme/wip）或者停在别的状态上（label 说是哪个状态）、分支已经在了、或者工作区已经在一次 /gtw fix 里。
+          工作区还留在上一个 fix 的 worktree 里时（就是"工作区已经在一次 /gtw fix 里"）：先把聊天带回主仓库（/gtw back），下一轮的 fix 必须从 main 开始。
           500：worktree 建不出来；或者 worktree 好了而 issue 没送到 agent，事实里带着 issue/branch/worktree/mode。
+          worktree 留在那儿时：这一轮到此为止，先把聊天带回主仓库（/gtw back）再收尾。
           503：label 写不上去，或者认不出 git host。
           429：上游被限流——run 停下来等操作员，不要重跑这一步。
+          这一步没做成就别用 next 跳过它：跳过了它，这一轮会接着走进没有 issue 的流水线，review、commit、push、pr 都会空转。
       - id: idle
         cmd:
           name: skip

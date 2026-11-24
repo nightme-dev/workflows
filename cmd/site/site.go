@@ -356,12 +356,16 @@ func kindOf(step wfe.Step) string {
 //
 // A step that runs no builtin names none: the name is empty. A cmd
 // step may carry a message as well — the message is what it does in
-// the chat — so the name is what tells the two apart.
+// the chat — and it may name no command at all, so the kind and not
+// the name is what tells a cmd step from a plain message step.
+//
+// The name is trimmed the way the runtime trims it: the engine runs
+// the command the name says, spaces and all.
 func cmdOf(step wfe.Step) string {
 	if step.Cmd == nil {
 		return ""
 	}
-	return step.Cmd.Name
+	return strings.TrimSpace(step.Cmd.Name)
 }
 
 // readBundles reads the bundles of the workflows directory.
