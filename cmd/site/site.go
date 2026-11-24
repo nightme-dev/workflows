@@ -141,6 +141,21 @@ type apiIndex struct {
 // apiVersion is the shape of the files of the API.
 const apiVersion = 1
 
+// apiDir is the directory the machine-readable files of the site live
+// in.
+//
+// It is a root path of the site: a namespace may not take the name.
+const apiDir = "api"
+
+// apiPath is the path of the file of a workflow in the API.
+//
+// It is the path of the file of the site source and the path the API
+// serves the file at: the index names the file of a workflow, and the
+// file is where the index says it is.
+func apiPath(address string) string {
+	return apiDir + "/" + address + ".json"
+}
+
 // argRecord is one argument of a workflow.
 //
 // An argument with a default is optional, an argument without one is
@@ -311,7 +326,7 @@ func (b bundle) record(hist history, siteURL string) workflowRecord {
 			Source:     blobURL(b.path + "/" + workflowFile),
 			RawSource:  rawURL(b.path + "/" + workflowFile),
 			URL:        siteURL + "/" + b.address + "/",
-			Detail:     siteURL + "/api/" + b.address + ".json",
+			Detail:     siteURL + "/" + apiPath(b.address),
 			LastCommit: commitRecord{},
 		},
 		Jobs:    jobsOf(b.workflow),

@@ -131,8 +131,12 @@ func run(args []string, out, errOut io.Writer) int {
 //
 // The links of the API are absolute: a consumer on another domain
 // uses them as they are. A base that is not an absolute http or https
-// URL cannot be the base of such a link, and a base that carries a
-// query or a fragment cannot take a path under it.
+// URL cannot be the base of such a link, a base that carries a query
+// or a fragment cannot take a path under it, and a base that carries a
+// user name would publish that name in every link.
+//
+// The URL that is returned is the parsed one: the links are built from
+// the URL that was checked, not from the text that was typed.
 func siteURLOf(value string) (string, error) {
 	parsed, err := url.Parse(value)
 	if err != nil {
@@ -141,10 +145,13 @@ func siteURLOf(value string) (string, error) {
 	if (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
 		return "", &usageError{reason: fmt.Sprintf("the site URL %q is not an absolute http or https URL", value)}
 	}
-	if parsed.RawQuery != "" || parsed.Fragment != "" {
+	if parsed.RawQuery != "" || parsed.ForceQuery || strings.Contains(value, "#") {
 		return "", &usageError{reason: fmt.Sprintf("the site URL %q carries a query or a fragment; the links are built from its path", value)}
 	}
-	return strings.TrimRight(value, "/"), nil
+	if parsed.User != nil {
+		return "", &usageError{reason: fmt.Sprintf("the site URL %q carries a user name; the links are published and would carry it too", value)}
+	}
+	return strings.TrimRight(parsed.String(), "/"), nil
 }
 
 // usageError says the command was called wrong.

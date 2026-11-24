@@ -954,9 +954,22 @@ func TestTheSiteURLNamesTheBaseOfTheLinks(t *testing.T) {
 // that names the base URL of the links.
 //
 // The links of the API are absolute, so a base that is not an absolute
-// http or https URL is a value the command was called wrong with.
+// http or https URL is a value the command was called wrong with. A
+// base that carries a query or a fragment cannot take a path under
+// it, and a base that carries a user name would publish that name in
+// every link.
 func TestTheSiteURLRefusesAValueThatIsNotAnAbsoluteURL(t *testing.T) {
-	for _, value := range []string{"example.test/wf", "/workflows", "ftp://example.test/wf", "https://", "", "https://example.test/wf?a=b"} {
+	for _, value := range []string{
+		"example.test/wf",
+		"/workflows",
+		"ftp://example.test/wf",
+		"https://",
+		"",
+		"https://example.test/wf?a=b",
+		"https://example.test/wf?",
+		"https://example.test/wf#",
+		"https://user:secret@example.test/wf",
+	} {
 		t.Run(value, func(t *testing.T) {
 			tr := newTree(t)
 			tr.templates()
@@ -967,6 +980,33 @@ func TestTheSiteURLRefusesAValueThatIsNotAnAbsoluteURL(t *testing.T) {
 			code, _, errOut := runProgram(t, "--site-url", value)
 			if code != exitUsage {
 				t.Errorf("the site URL %q exits %d, want %d:\n%s", value, code, exitUsage, errOut)
+			}
+		})
+	}
+}
+
+// TestTheSiteURLIsNormalized checks the base the links are built from.
+//
+// The base is the URL that was parsed, not the text that was typed:
+// the links are built from the URL that was checked.
+func TestTheSiteURLIsNormalized(t *testing.T) {
+	cases := []struct {
+		value string
+		want  string
+	}{
+		{value: "https://example.test/wf", want: "https://example.test/wf"},
+		{value: "https://example.test/wf/", want: "https://example.test/wf"},
+		{value: "https://example.test", want: "https://example.test"},
+		{value: "HTTPS://example.test/wf", want: "https://example.test/wf"},
+	}
+	for _, c := range cases {
+		t.Run(c.value, func(t *testing.T) {
+			got, err := siteURLOf(c.value)
+			if err != nil {
+				t.Fatalf("the site URL %q is refused: %v", c.value, err)
+			}
+			if got != c.want {
+				t.Errorf("the site URL %q is %q, want %q", c.value, got, c.want)
 			}
 		})
 	}

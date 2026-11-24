@@ -132,7 +132,7 @@ func writeData(out string, data *siteData) error {
 // not build into the built site as they are, so the published site
 // serves them at the path they have here.
 func writeAPI(out string, data *siteData) error {
-	dir := filepath.Join(out, "api")
+	dir := filepath.Join(out, apiDir)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return &unreadableError{reason: fmt.Sprintf("%s: %v", dir, err)}
 	}
@@ -140,11 +140,13 @@ func writeAPI(out string, data *siteData) error {
 		return err
 	}
 	for _, rec := range data.Records {
-		ns := filepath.Join(dir, rec.Namespace)
-		if err := os.MkdirAll(ns, 0o755); err != nil {
-			return &unreadableError{reason: fmt.Sprintf("%s: %v", ns, err)}
+		// The file is written where the index says it is: the path
+		// of the file and the URL of the file are the same path.
+		path := filepath.Join(out, filepath.FromSlash(apiPath(rec.Address)))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return &unreadableError{reason: fmt.Sprintf("%s: %v", filepath.Dir(path), err)}
 		}
-		if err := writeJSON(filepath.Join(ns, rec.Name+".json"), rec); err != nil {
+		if err := writeJSON(path, rec); err != nil {
 			return err
 		}
 	}
