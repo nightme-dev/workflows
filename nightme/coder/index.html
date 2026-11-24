@@ -116,7 +116,26 @@
             
             
           </td>
-          <td>从 nightme/assigned 队列里挑一个 issue 交给 agent 修。挑不到（data.issue 为空）这轮就没活干，后面的步骤都跳过。</td>
+          <td>200 且带 issue 事实：挑到了一个 issue，这轮接着往下走。 issue/branch/worktree/mode 说得出是哪个 issue、在哪个分支、在哪个 worktree 里；changes/paths/staged/unstaged/untracked/commits 说得出 agent 改了什么。 200 但没有 issue 事实：队列里没有可挑的，这轮到此为止。 wake_after/candidates/held/blocked/branch_exists/pr_open 说得出为什么没挑到（等多久再来、看了几个候选、几个被别人占着、几个卡在依赖上、几个分支已经在了、几个 PR 已经开着）。 400：没有 issue 号，或者没有工作区。 404：这个 issue 不存在。 409：世界挡着——issue 被别的 agent 占了（label 是 nightme/wip）或者停在别的状态上（label 说是哪个状态）、分支已经在了、或者工作区已经在一次 /gtw fix 里。 工作区还留在上一个 fix 的 worktree 里时（就是&quot;工作区已经在一次 /gtw fix 里&quot;）：先把聊天带回主仓库（/gtw back），下一轮的 fix 必须从 main 开始。 500：worktree 建不出来；或者 worktree 好了而 issue 没送到 agent，事实里带着 issue/branch/worktree/mode。 worktree 留在那儿时：这一轮到此为止，先把聊天带回主仓库（/gtw back）再收尾。 503：label 写不上去，或者认不出 git host。 429：上游被限流——run 停下来等操作员，不要重跑这一步。 这一步没做成就别用 next 跳过它：跳过了它，这一轮会接着走进没有 issue 的流水线，review、commit、push、pr 都会空转。
+</td>
+        </tr>
+        
+        <tr>
+          <td>
+            <code>idle</code>
+            
+          </td>
+          <td><code>cmd</code></td>
+          <td>
+            <p class="if">if <code>steps.fix.outputs.success &amp;&amp; !steps.fix.outputs.data.issue</code></p>
+            
+            <pre>/gtw back</pre>
+            <pre>cmd: skip</pre>
+            
+            
+          </td>
+          <td>队列空的那一轮：/gtw back 把聊天带回主仓库，skip 让这一轮悄悄结束——报告里不留痕迹。 /gtw back 报 404 时（没有可以退出的 fix，聊天本来就在主仓库），消息失败就是这一步的失败，skip 不跑，这一轮停在判断点，由你决定。
+</td>
         </tr>
         
         <tr>
@@ -126,13 +145,14 @@
           </td>
           <td><code>message</code></td>
           <td>
-            <p class="if">if <code>${{ steps.fix.outputs.data.issue }}</code></p>
+            <p class="if">if <code>steps.fix.outputs.data.issue</code></p>
             
             <pre>/gtw commit</pre>
             
             
           </td>
-          <td>提交 agent 的改动。真没东西可提交时 instruct 让 agent 改，改完 resume 这一步。</td>
+          <td>200：改动提交了，branch/sha_range/commits/agent 说得出提交在哪、是哪一段、几个提交。 200 且 commits=0：真没东西可提交。 400：这里不是 git 仓库，或者没有工作区。 404：没有可以接着续的失败提交。 409：有没解完的冲突、HEAD 是游离的，或者 agent 根本没把活提交了——让 agent 把 worktree 收拾好，真的提交一次。 500：worktree 的状态读不到。 429：上游被限流——run 停下来等操作员，不要重跑这一步。
+</td>
         </tr>
         
         <tr>
@@ -142,13 +162,14 @@
           </td>
           <td><code>message</code></td>
           <td>
-            <p class="if">if <code>${{ steps.fix.outputs.data.issue }}</code></p>
+            
             
             <pre>/review</pre>
             
             
           </td>
-          <td>review 本分支与 base 的差异，findings 回到聊天里。链 [omp, codex] 自己降级：omp 留下没跑完的组时 codex 只接管那几组，不用你手动降级。 链用完了还有组没跑完（outcome 带 unfinished）时，别重跑本步 —— 重跑是一次全新的整审，白做。决定模型这时该选 escalate 把活交给 chat 模型， chat 模型有 ntm_review 工具：跑 ntm_review(args=&quot;--continue&quot;) 就能用最后一个 agent 续剩下的组，每组只有一次恢复额度；报 no review to continue（记录没了）就别再试，往下走。 no_diff 是异常：fix 本该改出了东西，分支却和 base 一样 —— instruct 让 agent 真正改出来，再跑 commit 和 review； base_unknown 是 base 分支没解析出来，也什么都没 review，先弄清 base 再跑 review；already_running 就用 wait 等它结束再看。</td>
+          <td>200：review 跑过了，agent/groups/findings/unfinished/delivered 说得出谁跑的、几组、几条 findings、还有几组没跑完、findings 有没有交到 agent 手里。 404：没有可 review 的差异——分支和 base 一样，让 agent 真的改出东西来，再跑 commit 和 review。 500：review 失败了；statusText 说的是 base 分支既读不到也修不好（先把 base 弄明白），还是 review 本身坏了。 501：这个 agent 没法 review，换一个能 review 的。 unfinished 大于 0：链用完了还有组没跑完——不要重跑本步，重跑是一次全新的整审；用 ntm_review --continue 接管剩下那几组。 429：上游被限流——run 停下来等操作员，不要重跑这一步。
+</td>
         </tr>
         
         <tr>
@@ -158,13 +179,14 @@
           </td>
           <td><code>message</code></td>
           <td>
-            <p class="if">if <code>${{ steps.fix.outputs.data.issue }}</code></p>
+            
             
             <pre>/gtw commit</pre>
             
             
           </td>
-          <td>提交 review 后的修改。findings 只修成立且必要的，其余驳回；要修的 instruct 交给 agent 改，改完 resume 这一步。</td>
+          <td>200：改动提交了，branch/sha_range/commits/agent 说得出提交在哪、是哪一段、几个提交。 200 且 commits=0：真没东西可提交。 400：这里不是 git 仓库，或者没有工作区。 404：没有可以接着续的失败提交。 409：有没解完的冲突、HEAD 是游离的，或者 agent 根本没把活提交了——让 agent 把 worktree 收拾好，真的提交一次。 500：worktree 的状态读不到。 429：上游被限流——run 停下来等操作员，不要重跑这一步。
+</td>
         </tr>
         
         <tr>
@@ -174,13 +196,14 @@
           </td>
           <td><code>message</code></td>
           <td>
-            <p class="if">if <code>${{ steps.fix.outputs.data.issue }}</code></p>
+            
             
             <pre>/gtw push</pre>
             
             
           </td>
-          <td>推送分支。本地还有没推的提交时 instruct 让 agent 提交后 resume 这一步。</td>
+          <td>200：分支推上去了，branch/commits/remote_head 说得出推的是哪个分支、几个提交、远端现在指向哪。 200 且 commits=0：远端已经是这个分支了。 409：push 一个提交都没动，可分支上还带着远端没有的提交——先让 agent 把它们提交了。 500：远端的 tip 读不到。
+</td>
         </tr>
         
         <tr>
@@ -190,13 +213,14 @@
           </td>
           <td><code>message</code></td>
           <td>
-            <p class="if">if <code>${{ steps.fix.outputs.data.issue }}</code></p>
+            
             
             <pre>/gtw pr --ready</pre>
             
             
           </td>
-          <td>开 PR 并把 issue 标成 ready。no_remote_branch：instruct 让 agent 推；no_commits：instruct 让 agent 提交；改完 resume 这一步。</td>
+          <td>200：PR 开出来了，pr_number/pr_url 说得出是哪个 PR；PR 已经开着也是正常分支。 404：分支还没发布到 origin——先让 agent 推上去。 409：分支对 base 一个提交都没有——让 agent 提交，或者把 base 并进分支。 500：agent 的回复不是 PR 的格式，format 说得出是哪里不对——标题和正文要按预期的格式写。 429：上游被限流——run 停下来等操作员，不要重跑这一步。
+</td>
         </tr>
         
         <tr>
@@ -206,7 +230,7 @@
           </td>
           <td><code>wait</code></td>
           <td>
-            <p class="if">if <code>${{ steps.fix.outputs.data.issue }}</code></p>
+            
             
             <pre>60s</pre>
             
@@ -222,13 +246,14 @@
           </td>
           <td><code>message</code></td>
           <td>
-            <p class="if">if <code>${{ steps.fix.outputs.data.issue }}</code></p>
+            
             
             <pre>/gtw pr view ${{ steps.pr.outputs.data.pr_number }}</pre>
             
             
           </td>
-          <td>看 PR 现在能不能合；conflict=1 是正常分支，下面的修复步骤据此处理。</td>
+          <td>200：PR 现在什么状态，pr_state/base_branch/merge_state/conflict 说得出它是开着还是关了、base 是哪个、能不能合、有没有冲突（conflict 是 &quot;true&quot; 或者 &quot;false&quot;）。 404：这个 PR 不存在。 503：连不上 git host。
+</td>
         </tr>
         
         <tr>
@@ -238,7 +263,7 @@
           </td>
           <td><code>message</code></td>
           <td>
-            <p class="if">if <code>${{ steps.pr-view.outputs.data.conflict }}</code></p>
+            <p class="if">if <code>steps.pr-view.outputs.data.conflict</code></p>
             
             <pre>PR #${{ steps.pr-view.outputs.data.pr_number }} 有合并冲突。
 在这个 worktree 里先 git fetch，再把它的 base 分支（${{ steps.pr-view.outputs.data.base_branch }}）合并进当前分支。
@@ -248,7 +273,7 @@
             
             
           </td>
-          <td>只有冲突时才让 chat 的 agent 去修。</td>
+          <td>只有冲突时才让 chat 的 agent 去修：把 base 并进来、解掉冲突、提交并推送，让 PR 变成可合并。</td>
         </tr>
         
         <tr>
@@ -258,7 +283,7 @@
           </td>
           <td><code>wait</code></td>
           <td>
-            <p class="if">if <code>${{ steps.pr-view.outputs.data.conflict }}</code></p>
+            <p class="if">if <code>steps.pr-view.outputs.data.conflict</code></p>
             
             <pre>60s</pre>
             
@@ -274,29 +299,30 @@
           </td>
           <td><code>message</code></td>
           <td>
-            <p class="if">if <code>${{ steps.pr-view.outputs.data.conflict }}</code></p>
+            <p class="if">if <code>steps.pr-view.outputs.data.conflict</code></p>
             
             <pre>/gtw pr view ${{ steps.pr-view.outputs.data.pr_number }}</pre>
             
             
           </td>
-          <td>修完再查一次；还冲突就是没修好，本轮到此为止。</td>
+          <td>修完冲突后再查一次 merge state；还冲突就是没修好。</td>
         </tr>
         
         <tr>
           <td>
             <code>back</code>
-            <span class="tag">final</span>
+            
           </td>
           <td><code>message</code></td>
           <td>
-            <p class="if">if <code>${{ steps.fix.outputs.data.issue }}</code></p>
+            <p class="if">if <code>steps.fix.outputs.data.worktree</code></p>
             
             <pre>/gtw back</pre>
             
             
           </td>
-          <td>回主仓库目录。下一轮的 fix 必须从 main 开始 —— worktree 里再 fix 会报 already_active。</td>
+          <td>200：聊天退出 worktree 回到主仓库，worktree/repo_root 说得出退的是哪个、回到哪儿——下一轮从 main 开始。 400：没有活动的工作区。 404：没有可以退出的 fix。 500：聊天退出了 worktree，但主分支没能同步。
+</td>
         </tr>
         
       </tbody>
@@ -310,9 +336,9 @@
   <h2>Last change</h2>
   
   <p>
-    <a href="https://github.com/nightme-dev/workflows/commit/ee982f6"><code>ee982f6</code></a>
-    <span class="date">2026-11-21</span>
-    — feat(coder): 采用新 workflow schema 与链式 fallback (#16)
+    <a href="https://github.com/nightme-dev/workflows/commit/24c76d1"><code>24c76d1</code></a>
+    <span class="date">2026-11-24</span>
+    — feat(coder): 为新结果契约重写 coder 工作流 (#18)
   </p>
   
 </section>
