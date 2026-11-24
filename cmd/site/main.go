@@ -21,7 +21,9 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
+	"strings"
 )
 
 // The exit codes. They are the codes of cmd/validate, so a CI job
@@ -45,6 +47,9 @@ const (
 	defaultWorkflows    = "workflows"
 	defaultOut          = "docs"
 	defaultChangesLimit = 30
+	// defaultSiteURL is where the site is published: the links of the
+	// API are absolute, and this is the base they are built from.
+	defaultSiteURL = "https://nightme-dev.github.io/workflows"
 )
 
 // invalidError says the repository does not fit the site.
@@ -83,12 +88,13 @@ func run(args []string, out, errOut io.Writer) int {
 	flags := flag.NewFlagSet("site", flag.ContinueOnError)
 	flags.SetOutput(errOut)
 	flags.Usage = func() {
-		fmt.Fprintf(errOut, "usage: site [--templates <dir>] [--workflows <dir>] [--out <dir>] [--changes-limit <n>]\n")
+		fmt.Fprintf(errOut, "usage: site [--templates <dir>] [--workflows <dir>] [--out <dir>] [--changes-limit <n>] [--site-url <url>]\n")
 	}
 	templates := flags.String("templates", defaultTemplates, "the directory the site templates live in")
 	workflows := flags.String("workflows", defaultWorkflows, "the directory the workflows live in")
 	outDir := flags.String("out", defaultOut, "the directory the site source is written to")
 	limit := flags.Int("changes-limit", defaultChangesLimit, "how many commits the changes page holds")
+	siteURL := flags.String("site-url", defaultSiteURL, "the base URL the absolute links of the site are built from")
 	if err := flags.Parse(args); err != nil {
 		return exitUsage
 	}
@@ -100,7 +106,12 @@ func run(args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(errOut, "site: --changes-limit cannot be negative")
 		return exitUsage
 	}
-	data, err := build(*templates, *workflows, *limit)
+	base, err := siteURLOf(*siteURL)
+	if err != nil {
+		fmt.Fprintf(errOut, "site: %v\n", err)
+		return exitUsage
+	}
+	data, err := build(*templates, *workflows, *limit, base)
 	if err != nil {
 		fmt.Fprintf(errOut, "site: %v\n", err)
 		return codeOf(err)
@@ -113,6 +124,27 @@ func run(args []string, out, errOut io.Writer) int {
 		plural(len(data.Records), "workflow", "workflows"),
 		plural(len(data.Changes), "change", "changes"))
 	return exitOK
+}
+
+// siteURLOf checks the base URL of the absolute links and returns it
+// without its trailing slash.
+//
+// The links of the API are absolute: a consumer on another domain
+// uses them as they are. A base that is not an absolute http or https
+// URL cannot be the base of such a link, and a base that carries a
+// query or a fragment cannot take a path under it.
+func siteURLOf(value string) (string, error) {
+	parsed, err := url.Parse(value)
+	if err != nil {
+		return "", &usageError{reason: fmt.Sprintf("the site URL %q is not a URL: %v", value, err)}
+	}
+	if (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		return "", &usageError{reason: fmt.Sprintf("the site URL %q is not an absolute http or https URL", value)}
+	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "", &usageError{reason: fmt.Sprintf("the site URL %q carries a query or a fragment; the links are built from its path", value)}
+	}
+	return strings.TrimRight(value, "/"), nil
 }
 
 // usageError says the command was called wrong.

@@ -100,7 +100,8 @@ The site holds:
   changed it last;
 - the changes page, with the commits that touched the workflows and what
   they did;
-- a search box on every page, which searches the whole site.
+- a search box on every page, which searches the whole site;
+- the machine-readable files of the API, described below.
 
 The site is built from the workflows and from the templates of the
 [`templates/`](templates/) directory. The templates are the only source of
@@ -124,3 +125,34 @@ which is built after Jekyll:
 ```sh
 pagefind --site .site
 ```
+
+### The API
+
+The site serves a machine-readable API as well, so that another program can
+list the workflows and describe them without reading the HTML. The files
+are written by the same generator that writes the site, into the site
+source, and Jekyll copies them into the built site as they are:
+
+- `api/index.json` lists every workflow of the repository, in the order of
+  its addresses: its address, its identity, its title, its summary, its
+  arguments, its triggers, its workspaces, the links to its page, to its
+  own file of the API and to its file in the repository, and the commit that
+  changed it last;
+- `api/<ns>/<name>.json` holds the whole record of one workflow: the fields
+  of the index plus its jobs, their steps and the actions it ships.
+
+The index carries the version of its shape, the number of workflows it
+lists, the namespaces of those workflows, and the date of the newest commit
+that touched the workflows. The date comes from the history of the
+repository and not from the clock: two builds of the same tree are the same
+bytes, so a rebuild of the site that changes nothing publishes nothing.
+
+The links of the API are absolute, and the base they are built from is the
+`--site-url` flag of the generator:
+
+```sh
+go run ./cmd/site --templates templates --workflows workflows --out docs \
+  --site-url https://nightme-dev.github.io/workflows
+```
+
+The flag defaults to that URL, which is where the site is published.

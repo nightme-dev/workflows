@@ -32,7 +32,11 @@ const scriptExt = ".sh"
 // it: the namespace page of "changes" and the changes page would be
 // the same page. A workflow is two segments deep, so it never
 // collides.
-var reservedPaths = []string{"assets", "changes", "pagefind"}
+//
+// The API lives under "api": the machine-readable files of the site
+// are served from that path, so a namespace that takes the name would
+// take their prefix.
+var reservedPaths = []string{"api", "assets", "changes", "pagefind"}
 
 // reservedNames are the names a namespace may not take because a page
 // of the site already has their file name.
@@ -75,28 +79,67 @@ type siteData struct {
 	Changes []changeRecord
 	// Namespaces are the namespaces of the workflows, in order.
 	Namespaces []string
+	// API is the index of the machine-readable files of the site.
+	API apiIndex
+}
+
+// workflowEntry is one workflow without its jobs and its actions.
+//
+// It holds the facts of a workflow that are the same wherever the
+// workflow is shown: the site reads them, and the index of the API
+// lists one of these for every workflow of the repository.
+type workflowEntry struct {
+	Address    string       `json:"address"`
+	Identity   string       `json:"identity"`
+	Namespace  string       `json:"namespace"`
+	Name       string       `json:"name"`
+	Title      string       `json:"title"`
+	Summary    string       `json:"summary"`
+	Args       []argRecord  `json:"args"`
+	Instruct   bool         `json:"instruct"`
+	Workspaces []string     `json:"workspaces"`
+	On         wfe.Trigger  `json:"on"`
+	Source     string       `json:"source"`
+	RawSource  string       `json:"raw_source"`
+	URL        string       `json:"url"`
+	Detail     string       `json:"detail"`
+	LastCommit commitRecord `json:"last_commit"`
 }
 
 // workflowRecord is one workflow as the templates read it.
 //
 // The fields are the ones the layouts of the site use: a layout reads
 // the record and renders it, it does not read the workflow file.
+//
+// The jobs and the actions are the ones the index of the API does not
+// carry: the index lists the entries, and the detail file of a
+// workflow holds its whole record.
 type workflowRecord struct {
-	Address    string         `json:"address"`
-	Identity   string         `json:"identity"`
-	Namespace  string         `json:"namespace"`
-	Name       string         `json:"name"`
-	Title      string         `json:"title"`
-	Summary    string         `json:"summary"`
-	Args       []argRecord    `json:"args"`
-	Instruct   bool           `json:"instruct"`
-	Workspaces []string       `json:"workspaces"`
-	On         wfe.Trigger    `json:"on"`
-	Jobs       []jobRecord    `json:"jobs"`
-	Actions    []actionRecord `json:"actions"`
-	Source     string         `json:"source"`
-	LastCommit commitRecord   `json:"last_commit"`
+	workflowEntry
+	Jobs    []jobRecord    `json:"jobs"`
+	Actions []actionRecord `json:"actions"`
 }
+
+// apiIndex is the index of the API: every workflow of the repository.
+//
+// The version says which shape the file has: a consumer that does not
+// know the version does not read the file.
+type apiIndex struct {
+	// Version is the shape of the index.
+	Version int `json:"version"`
+	// GeneratedAt is the date of the newest commit that touched the
+	// workflows. It is absent when the history knows no commit.
+	GeneratedAt string `json:"generated_at,omitempty"`
+	// Count is the number of workflows the index lists.
+	Count int `json:"count"`
+	// Namespaces are the namespaces of the workflows, sorted.
+	Namespaces []string `json:"namespaces"`
+	// Workflows are the workflows, ordered by address.
+	Workflows []workflowEntry `json:"workflows"`
+}
+
+// apiVersion is the shape of the files of the API.
+const apiVersion = 1
 
 // argRecord is one argument of a workflow.
 //
@@ -171,7 +214,11 @@ type changeRecord struct {
 //
 // The templates are read first: a site without them is not a site,
 // and the reader wants to know that before the workflows are read.
-func build(templates, workflowsRoot string, limit int) (*siteData, error) {
+//
+// The site URL is the base the absolute links are built from: the
+// site may be published on another domain than the one it is built
+// on.
+func build(templates, workflowsRoot string, limit int, siteURL string) (*siteData, error) {
 	if err := checkDir(templates); err != nil {
 		return nil, err
 	}
@@ -191,16 +238,16 @@ func build(templates, workflowsRoot string, limit int) (*siteData, error) {
 	if err := checkNamespaces(bundles); err != nil {
 		return nil, err
 	}
-	return buildSite(bundles, hist, limit)
+	return buildSite(bundles, hist, limit, siteURL)
 }
 
 // buildSite turns the bundles of the repository and the history into
 // the facts the site is built from.
-func buildSite(bundles []bundle, hist history, limit int) (*siteData, error) {
+func buildSite(bundles []bundle, hist history, limit int, siteURL string) (*siteData, error) {
 	records := make([]workflowRecord, 0, len(bundles))
 	namespaces := map[string]bool{}
 	for _, b := range bundles {
-		records = append(records, b.record(hist))
+		records = append(records, b.record(hist, siteURL))
 		namespaces[b.namespace] = true
 	}
 	changes, err := hist.changes(limit)
@@ -212,26 +259,63 @@ func buildSite(bundles []bundle, hist history, limit int) (*siteData, error) {
 		names = append(names, ns)
 	}
 	sort.Strings(names)
-	return &siteData{Records: records, Changes: changes, Namespaces: names}, nil
+	return &siteData{
+		Records:    records,
+		Changes:    changes,
+		Namespaces: names,
+		API:        apiIndexOf(records, names, hist),
+	}, nil
+}
+
+// apiIndexOf builds the index of the API.
+//
+// The index lists every workflow, ordered by address. It says when
+// the workflows last changed: the date comes from a query of its own,
+// so the changes page may hold no commit at all and the index still
+// says how fresh it is.
+func apiIndexOf(records []workflowRecord, namespaces []string, hist history) apiIndex {
+	index := apiIndex{
+		Version:    apiVersion,
+		Count:      len(records),
+		Namespaces: namespaces,
+		Workflows:  make([]workflowEntry, 0, len(records)),
+	}
+	for _, rec := range records {
+		index.Workflows = append(index.Workflows, rec.workflowEntry)
+	}
+	if date, ok := hist.lastChange(); ok {
+		index.GeneratedAt = date
+	}
+	return index
 }
 
 // record turns a bundle into the record the templates read.
-func (b bundle) record(hist history) workflowRecord {
+//
+// The links are absolute: a consumer on another domain uses them as
+// they are. The page of the workflow, the file of the API and the
+// file of the repository are all named by the address of the
+// workflow.
+func (b bundle) record(hist history, siteURL string) workflowRecord {
 	rec := workflowRecord{
-		Address:    b.address,
-		Identity:   b.identity,
-		Namespace:  b.namespace,
-		Name:       b.name,
-		Title:      b.workflow.Title,
-		Summary:    b.summary,
-		Args:       argsOf(b.workflow),
-		Instruct:   b.workflow.Instruct,
-		Workspaces: workspacesOf(b.workflow),
-		On:         b.workflow.On,
-		Jobs:       jobsOf(b.workflow),
-		Actions:    b.actions,
-		Source:     blobURL(b.path + "/" + workflowFile),
-		LastCommit: commitRecord{},
+		workflowEntry: workflowEntry{
+			Address:    b.address,
+			Identity:   b.identity,
+			Namespace:  b.namespace,
+			Name:       b.name,
+			Title:      b.workflow.Title,
+			Summary:    b.summary,
+			Args:       argsOf(b.workflow),
+			Instruct:   b.workflow.Instruct,
+			Workspaces: workspacesOf(b.workflow),
+			On:         b.workflow.On,
+			Source:     blobURL(b.path + "/" + workflowFile),
+			RawSource:  rawURL(b.path + "/" + workflowFile),
+			URL:        siteURL + "/" + b.address + "/",
+			Detail:     siteURL + "/api/" + b.address + ".json",
+			LastCommit: commitRecord{},
+		},
+		Jobs:    jobsOf(b.workflow),
+		Actions: b.actions,
 	}
 	if commit, ok := hist.lastCommit(b.address); ok {
 		rec.LastCommit = commit
