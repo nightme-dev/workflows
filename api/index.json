@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "generated_at": "2026-11-24",
+  "count": 1,
+  "namespaces": [
+    "nightme"
+  ],
+  "workflows": [
+    {
+      "address": "nightme/coder",
+      "identity": "nightme-coder",
+      "namespace": "nightme",
+      "name": "coder",
+      "title": "每轮把 nightme/assigned 队列里的一个 issue 修好、review 过并处理 findings，开成一个能合的 PR。",
+      "summary": "",
+      "args": [
+        {
+          "name": "issue",
+          "default": "*",
+          "required": false
+        }
+      ],
+      "instruct": true,
+      "workspaces": [],
+      "on": {},
+      "source": "https://github.com/nightme-dev/workflows/blob/main/workflows/nightme/coder/workflow.yml",
+      "raw_source": "https://raw.githubusercontent.com/nightme-dev/workflows/main/workflows/nightme/coder/workflow.yml",
+      "url": "https://nightme-dev.github.io/workflows/nightme/coder/",
+      "detail": "https://nightme-dev.github.io/workflows/api/nightme/coder.json",
+      "last_commit": {
+        "sha": "24c76d1",
+        "date": "2026-11-24",
+        "subject": "feat(coder): 为新结果契约重写 coder 工作流 (#18)",
+        "url": "https://github.com/nightme-dev/workflows/commit/24c76d1"
+      }
+    }
+  ]
+}
