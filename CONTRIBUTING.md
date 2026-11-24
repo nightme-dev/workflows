@@ -174,10 +174,30 @@ scratch every time, and the page of a workflow that no longer exists is
 simply not there. The layout of the site is reviewed like everything else: a
 change of the templates is a pull request.
 
-Four names are reserved for the pages of the site itself: `assets`,
+### The API
+
+The site serves a machine-readable API as well. The same generator writes
+it into the site source, next to the data the pages are built from, and
+Jekyll copies it into the built site as it is:
+
+- `api/index.json` lists every workflow of the repository, in the order of
+  its addresses, with its summary fields and the absolute links to its page,
+  to its own file of the API and to its file in the repository;
+- `api/<ns>/<name>.json` holds the whole record of one workflow: the fields
+  of the index plus its jobs, their steps and the actions it ships.
+
+The index says when the workflows last changed: the date is the date of the
+newest commit that touched `workflows/`, and it is read from the history of
+the repository rather than from the clock, so two builds of the same tree
+produce the same bytes. The base URL of the absolute links is the
+`--site-url` flag of the generator, which defaults to
+<https://nightme-dev.github.io/workflows>.
+
+Five names are reserved for the pages of the site itself: `api`, `assets`,
 `changes`, `pagefind` and `index`. A workflow published under one of them
-has nowhere to go — the site would have two pages at the same address — so
-the generator refuses it and the site is not built. Any other namespace is
+has nowhere to go — the site would have two pages at the same address, and
+`api` is the path the machine-readable files are served from — so the
+generator refuses it and the site is not built. Any other namespace is
 free, as before.
 
 ## The CI pipeline

@@ -14,9 +14,21 @@ import (
 // there: the source of a workflow and the commit that changed it.
 const repoURL = "https://github.com/nightme-dev/workflows"
 
+// rawRepoURL is where the files of the repository live as they are
+// written, without the interface of GitHub around them.
+const rawRepoURL = "https://raw.githubusercontent.com/nightme-dev/workflows"
+
 // blobURL returns the URL of a file of the repository.
 func blobURL(path string) string {
 	return repoURL + "/blob/main/" + path
+}
+
+// rawURL returns the URL of a raw file of the repository.
+//
+// The raw file is the file itself: a consumer that wants the workflow
+// as it is written fetches it from there.
+func rawURL(path string) string {
+	return rawRepoURL + "/main/" + path
 }
 
 // commitURL returns the URL of a commit of the repository.
@@ -42,6 +54,13 @@ type history interface {
 	// changes returns the commits that touched the workflows, the
 	// newest first, at most limit of them.
 	changes(limit int) ([]changeRecord, error)
+	// lastChange returns the date of the newest commit that touched
+	// the workflows, and whether the history knows one.
+	//
+	// The date is read by a query of its own: the changes page may
+	// hold no commit at all, and the index of the API still says when
+	// the workflows last changed.
+	lastChange() (string, bool)
 }
 
 // gitHistory is the history of a git repository.
@@ -106,6 +125,24 @@ func (h *gitHistory) lastCommit(relPath string) (commitRecord, bool) {
 		Subject: parts[2],
 		URL:     commitURL(parts[0]),
 	}, true
+}
+
+// lastChange returns the date of the newest commit that touched the
+// workflows.
+//
+// The date is the one of the commit itself: two builds of the same
+// tree say the same thing, so the build of the site stays
+// reproducible.
+func (h *gitHistory) lastChange() (string, bool) {
+	out, err := runGit(h.root, "log", "-1", "--format=%ad", "--date=short", "--", h.workflows)
+	if err != nil {
+		return "", false
+	}
+	date := strings.TrimSpace(out)
+	if date == "" {
+		return "", false
+	}
+	return date, true
 }
 
 // changes returns the commits that touched the workflows, the newest

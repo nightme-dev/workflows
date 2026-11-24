@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -118,6 +120,9 @@ type fakeHistory struct {
 	commits map[string]commitRecord
 	// touched are the commits that touched the workflows.
 	touched []changeRecord
+	// last is the date of the newest commit that touched the
+	// workflows.
+	last string
 }
 
 // lastCommit returns the commit of the bundle at the path.
@@ -132,6 +137,12 @@ func (h fakeHistory) changes(limit int) ([]changeRecord, error) {
 		return h.touched[:limit], nil
 	}
 	return h.touched, nil
+}
+
+// lastChange returns the date of the newest commit that touched the
+// workflows.
+func (h fakeHistory) lastChange() (string, bool) {
+	return h.last, h.last != ""
 }
 
 // noHistory is a history that knows nothing.
@@ -149,10 +160,42 @@ func recordOf(t *testing.T, data *siteData, address string) workflowRecord {
 	return workflowRecord{}
 }
 
+// readIndex reads the index of the API of a site source.
+func readIndex(t *testing.T, dir string) apiIndex {
+	t.Helper()
+	raw := readFile(t, filepath.Join(dir, "api", "index.json"))
+	var index apiIndex
+	if err := json.Unmarshal(raw, &index); err != nil {
+		t.Fatalf("the index of the API is not JSON: %v", err)
+	}
+	return index
+}
+
+// readJSON reads a JSON file as it is written.
+func readJSON(t *testing.T, path string) map[string]any {
+	t.Helper()
+	raw := readFile(t, path)
+	var value map[string]any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		t.Fatalf("%s is not JSON: %v", path, err)
+	}
+	return value
+}
+
+// readFile reads a file of the tree.
+func readFile(t *testing.T, path string) []byte {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return raw
+}
+
 // siteOf builds the site of the bundles with the history.
 func siteOf(t *testing.T, bundles []bundle, hist history) *siteData {
 	t.Helper()
-	data, err := buildSite(bundles, hist, defaultChangesLimit)
+	data, err := buildSite(bundles, hist, defaultChangesLimit, defaultSiteURL)
 	if err != nil {
 		t.Fatalf("buildSite: %v", err)
 	}
@@ -662,6 +705,431 @@ func TestTheProgramWritesTheSite(t *testing.T) {
 	}
 	if records[0].LastCommit.SHA == "" {
 		t.Error("the record does not say which commit changed the workflow last")
+	}
+}
+
+// TestTheProgramWritesTheAPI runs the program and looks at the files
+// of the API.
+//
+// The index lists every workflow of the repository, and every workflow
+// has a file of its own that holds its whole record.
+func TestTheProgramWritesTheAPI(t *testing.T) {
+	tr := newTree(t)
+	tr.templates()
+	tr.bundle("alice", "fix", siteWorkflow)
+	tr.init()
+	tr.commit("add the workflow")
+	t.Chdir(tr.dir)
+	code, _, errOut := runProgram(t, "--templates", "templates", "--workflows", "workflows", "--out", "docs")
+	if code != exitOK {
+		t.Fatalf("the program exits %d, want %d:\n%s", code, exitOK, errOut)
+	}
+	for _, path := range []string{"docs/api/index.json", "docs/api/alice/fix.json"} {
+		if _, err := os.Stat(filepath.Join(tr.dir, path)); err != nil {
+			t.Errorf("the program did not write %s: %v", path, err)
+		}
+	}
+	index := readIndex(t, filepath.Join(tr.dir, "docs"))
+	// The version is the contract with the consumer of the file: it
+	// is written down here, and not read from the program.
+	if index.Version != 1 {
+		t.Errorf("the version of the index is %d, want 1", index.Version)
+	}
+	if index.Count != 1 {
+		t.Errorf("the index counts %d workflows, want 1", index.Count)
+	}
+	if !equal(index.Namespaces, []string{"alice"}) {
+		t.Errorf("the namespaces of the index are %v, want [alice]", index.Namespaces)
+	}
+	if len(index.Workflows) != 1 {
+		t.Fatalf("the index lists %d workflows, want 1", len(index.Workflows))
+	}
+	if index.Workflows[0].Address != "alice/fix" {
+		t.Errorf("the index lists %q, want %q", index.Workflows[0].Address, "alice/fix")
+	}
+}
+
+// TestTheIndexListsEveryWorkflowInOrder checks the order of the index.
+//
+// The index is the list of the workflows of the repository, and the
+// list has the order of the addresses: a consumer that reads the
+// index twice reads the same workflows in the same order.
+func TestTheIndexListsEveryWorkflowInOrder(t *testing.T) {
+	tr := newTree(t)
+	tr.templates()
+	tr.bundle("zulu", "fix", siteWorkflow)
+	tr.bundle("alice", "fix", siteWorkflow)
+	tr.bundle("alice", "alpha", siteWorkflow)
+	tr.init()
+	tr.commit("add the workflows")
+	t.Chdir(tr.dir)
+	code, _, errOut := runProgram(t)
+	if code != exitOK {
+		t.Fatalf("the program exits %d, want %d:\n%s", code, exitOK, errOut)
+	}
+	index := readIndex(t, filepath.Join(tr.dir, "docs"))
+	want := []string{"alice/alpha", "alice/fix", "zulu/fix"}
+	if len(index.Workflows) != len(want) {
+		t.Fatalf("the index lists %d workflows, want %d", len(index.Workflows), len(want))
+	}
+	if index.Count != len(want) {
+		t.Errorf("the index counts %d workflows, want %d", index.Count, len(want))
+	}
+	for i, address := range want {
+		if index.Workflows[i].Address != address {
+			t.Errorf("the workflow %d of the index is %q, want %q", i, index.Workflows[i].Address, address)
+		}
+	}
+	if !equal(index.Namespaces, []string{"alice", "zulu"}) {
+		t.Errorf("the namespaces of the index are %v, want [alice zulu]", index.Namespaces)
+	}
+}
+
+// TestTheIndexEntriesCarryNoJobs checks the shape of an entry.
+//
+// The index is a list of summaries: the jobs of a workflow and the
+// actions it ships are in the detail file of the workflow, and the
+// index does not repeat them.
+func TestTheIndexEntriesCarryNoJobs(t *testing.T) {
+	tr := newTree(t)
+	tr.templates()
+	tr.bundle("alice", "fix", siteWorkflow)
+	tr.init()
+	tr.commit("add the workflow")
+	t.Chdir(tr.dir)
+	code, _, errOut := runProgram(t)
+	if code != exitOK {
+		t.Fatalf("the program exits %d, want %d:\n%s", code, exitOK, errOut)
+	}
+	index := readJSON(t, filepath.Join(tr.dir, "docs", "api", "index.json"))
+	entries, ok := index["workflows"].([]any)
+	if !ok {
+		t.Fatalf("the workflows of the index are %v, want a list", index["workflows"])
+	}
+	for _, item := range entries {
+		entry, ok := item.(map[string]any)
+		if !ok {
+			t.Fatalf("the entry %v is not an object", item)
+		}
+		if _, ok := entry["jobs"]; ok {
+			t.Errorf("the entry of %v carries a jobs key", entry["address"])
+		}
+		if _, ok := entry["actions"]; ok {
+			t.Errorf("the entry of %v carries an actions key", entry["address"])
+		}
+	}
+}
+
+// TestTheDetailHoldsTheWholeRecord checks the file of a workflow.
+//
+// The detail file holds the whole record of the workflow: the fields
+// of the entry of the index, and the jobs with their steps and the
+// actions the workflow ships.
+func TestTheDetailHoldsTheWholeRecord(t *testing.T) {
+	tr := newTree(t)
+	tr.templates()
+	tr.bundle("alice", "fix", siteWorkflow)
+	tr.script("alice", "fix", "nightme-alice-report.sh")
+	tr.init()
+	tr.commit("add the workflow")
+	t.Chdir(tr.dir)
+	code, _, errOut := runProgram(t)
+	if code != exitOK {
+		t.Fatalf("the program exits %d, want %d:\n%s", code, exitOK, errOut)
+	}
+	index := readJSON(t, filepath.Join(tr.dir, "docs", "api", "index.json"))
+	detail := readJSON(t, filepath.Join(tr.dir, "docs", "api", "alice", "fix.json"))
+	entries, ok := index["workflows"].([]any)
+	if !ok || len(entries) != 1 {
+		t.Fatalf("the index holds %v, want one entry", index["workflows"])
+	}
+	entry, ok := entries[0].(map[string]any)
+	if !ok {
+		t.Fatalf("the entry %v is not an object", entries[0])
+	}
+	for key, value := range entry {
+		if !reflect.DeepEqual(detail[key], value) {
+			t.Errorf("the detail holds %q = %v, want %v", key, detail[key], value)
+		}
+	}
+	jobs, ok := detail["jobs"].([]any)
+	if !ok || len(jobs) != 1 {
+		t.Fatalf("the detail holds %v jobs, want one", detail["jobs"])
+	}
+	job, ok := jobs[0].(map[string]any)
+	if !ok {
+		t.Fatalf("the job %v is not an object", jobs[0])
+	}
+	steps, ok := job["steps"].([]any)
+	if !ok || len(steps) != 1 {
+		t.Fatalf("the job holds %v steps, want one", job["steps"])
+	}
+	step, ok := steps[0].(map[string]any)
+	if !ok {
+		t.Fatalf("the step %v is not an object", steps[0])
+	}
+	if step["id"] != "fix" {
+		t.Errorf("the step is %q, want %q", step["id"], "fix")
+	}
+	actions, ok := detail["actions"].([]any)
+	if !ok || len(actions) != 1 {
+		t.Fatalf("the detail holds %v actions, want one", detail["actions"])
+	}
+}
+
+// TestTheLinksAreAbsolute checks the links of a workflow.
+//
+// The links are absolute: a consumer on another domain uses them as
+// they are.
+func TestTheLinksAreAbsolute(t *testing.T) {
+	tr := newTree(t)
+	tr.templates()
+	tr.bundle("alice", "fix", siteWorkflow)
+	tr.init()
+	tr.commit("add the workflow")
+	t.Chdir(tr.dir)
+	code, _, errOut := runProgram(t)
+	if code != exitOK {
+		t.Fatalf("the program exits %d, want %d:\n%s", code, exitOK, errOut)
+	}
+	index := readIndex(t, filepath.Join(tr.dir, "docs"))
+	if len(index.Workflows) != 1 {
+		t.Fatalf("the index lists %d workflows, want 1", len(index.Workflows))
+	}
+	want := map[string]string{
+		"url":        "https://nightme-dev.github.io/workflows/alice/fix/",
+		"detail":     "https://nightme-dev.github.io/workflows/api/alice/fix.json",
+		"raw_source": "https://raw.githubusercontent.com/nightme-dev/workflows/main/workflows/alice/fix/workflow.yml",
+		"source":     "https://github.com/nightme-dev/workflows/blob/main/workflows/alice/fix/workflow.yml",
+	}
+	got := map[string]string{
+		"url":        index.Workflows[0].URL,
+		"detail":     index.Workflows[0].Detail,
+		"raw_source": index.Workflows[0].RawSource,
+		"source":     index.Workflows[0].Source,
+	}
+	for name, value := range want {
+		if got[name] != value {
+			t.Errorf("the %s is %q, want %q", name, got[name], value)
+		}
+	}
+}
+
+// TestTheSiteURLNamesTheBaseOfTheLinks checks the flag that names the
+// base URL of the links.
+//
+// The site may be published on another domain than the one it is
+// built on, and the links of the API follow it.
+func TestTheSiteURLNamesTheBaseOfTheLinks(t *testing.T) {
+	tr := newTree(t)
+	tr.templates()
+	tr.bundle("alice", "fix", siteWorkflow)
+	tr.init()
+	tr.commit("add the workflow")
+	t.Chdir(tr.dir)
+	code, _, errOut := runProgram(t, "--site-url", "https://example.test/wf")
+	if code != exitOK {
+		t.Fatalf("the program exits %d, want %d:\n%s", code, exitOK, errOut)
+	}
+	index := readIndex(t, filepath.Join(tr.dir, "docs"))
+	if len(index.Workflows) != 1 {
+		t.Fatalf("the index lists %d workflows, want 1", len(index.Workflows))
+	}
+	want := map[string]string{
+		"url":    "https://example.test/wf/alice/fix/",
+		"detail": "https://example.test/wf/api/alice/fix.json",
+	}
+	got := map[string]string{
+		"url":    index.Workflows[0].URL,
+		"detail": index.Workflows[0].Detail,
+	}
+	for name, value := range want {
+		if got[name] != value {
+			t.Errorf("the %s is %q, want %q", name, got[name], value)
+		}
+	}
+}
+
+// TestTheSiteURLRefusesAValueThatIsNotAnAbsoluteURL checks the flag
+// that names the base URL of the links.
+//
+// The links of the API are absolute, so a base that is not an absolute
+// http or https URL is a value the command was called wrong with. A
+// base that carries a query or a fragment cannot take a path under
+// it, and a base that carries a user name would publish that name in
+// every link.
+func TestTheSiteURLRefusesAValueThatIsNotAnAbsoluteURL(t *testing.T) {
+	for _, value := range []string{
+		"example.test/wf",
+		"/workflows",
+		"ftp://example.test/wf",
+		"https://",
+		"",
+		"https://example.test/wf?a=b",
+		"https://example.test/wf?",
+		"https://example.test/wf#",
+		"https://user:secret@example.test/wf",
+	} {
+		t.Run(value, func(t *testing.T) {
+			tr := newTree(t)
+			tr.templates()
+			tr.bundle("alice", "fix", siteWorkflow)
+			tr.init()
+			tr.commit("add the workflow")
+			t.Chdir(tr.dir)
+			code, _, errOut := runProgram(t, "--site-url", value)
+			if code != exitUsage {
+				t.Errorf("the site URL %q exits %d, want %d:\n%s", value, code, exitUsage, errOut)
+			}
+		})
+	}
+}
+
+// TestTheSiteURLIsNormalized checks the base the links are built from.
+//
+// The base is the URL that was parsed, not the text that was typed:
+// the links are built from the URL that was checked.
+func TestTheSiteURLIsNormalized(t *testing.T) {
+	cases := []struct {
+		value string
+		want  string
+	}{
+		{value: "https://example.test/wf", want: "https://example.test/wf"},
+		{value: "https://example.test/wf/", want: "https://example.test/wf"},
+		{value: "https://example.test", want: "https://example.test"},
+		{value: "HTTPS://example.test/wf", want: "https://example.test/wf"},
+	}
+	for _, c := range cases {
+		t.Run(c.value, func(t *testing.T) {
+			got, err := siteURLOf(c.value)
+			if err != nil {
+				t.Fatalf("the site URL %q is refused: %v", c.value, err)
+			}
+			if got != c.want {
+				t.Errorf("the site URL %q is %q, want %q", c.value, got, c.want)
+			}
+		})
+	}
+}
+
+// TestTheIndexOfARepositoryWithoutAWorkflow checks the index of a
+// repository that holds no workflow.
+//
+// The lists of the index are lists and not nothing: the data is read
+// by other programs too.
+func TestTheIndexOfARepositoryWithoutAWorkflow(t *testing.T) {
+	tr := newTree(t)
+	tr.templates()
+	if err := os.MkdirAll(tr.workflows(), 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", tr.workflows(), err)
+	}
+	tr.init()
+	tr.commit("add the templates")
+	t.Chdir(tr.dir)
+	code, _, errOut := runProgram(t)
+	if code != exitOK {
+		t.Fatalf("the program exits %d, want %d:\n%s", code, exitOK, errOut)
+	}
+	raw := readFile(t, filepath.Join(tr.dir, "docs", "api", "index.json"))
+	if !strings.Contains(string(raw), `"workflows": []`) {
+		t.Errorf("the index does not hold an empty list of workflows:\n%s", raw)
+	}
+	index := readIndex(t, filepath.Join(tr.dir, "docs"))
+	if index.Count != 0 {
+		t.Errorf("the index counts %d workflows, want 0", index.Count)
+	}
+	if index.Namespaces == nil || len(index.Namespaces) != 0 {
+		t.Errorf("the namespaces of the index are %v, want an empty list", index.Namespaces)
+	}
+	if index.GeneratedAt != "" {
+		t.Errorf("the index says %q, want nothing: no commit touched the workflows", index.GeneratedAt)
+	}
+	if _, err := os.Stat(filepath.Join(tr.dir, "docs", "api", "alice", "fix.json")); err == nil {
+		t.Error("the program wrote a detail file of a workflow that does not exist")
+	}
+}
+
+// TestTheIndexSaysWhenTheWorkflowsLastChanged checks the date of the
+// index.
+//
+// The date is the date of the newest commit that touched the
+// workflows, and it is read by a query of its own: the changes page
+// may hold no commit at all, and the index still says how fresh it
+// is.
+func TestTheIndexSaysWhenTheWorkflowsLastChanged(t *testing.T) {
+	tr := newTree(t)
+	tr.templates()
+	tr.bundle("alice", "fix", siteWorkflow)
+	tr.init()
+	tr.commit("add the workflow")
+	t.Chdir(tr.dir)
+	code, _, errOut := runProgram(t)
+	if code != exitOK {
+		t.Fatalf("the program exits %d, want %d:\n%s", code, exitOK, errOut)
+	}
+	want := strings.TrimSpace(tr.git("log", "-1", "--format=%ad", "--date=short", "--", "workflows"))
+	if want == "" {
+		t.Fatal("the history does not know the commit that added the workflow")
+	}
+	index := readIndex(t, filepath.Join(tr.dir, "docs"))
+	if index.GeneratedAt != want {
+		t.Errorf("the index says %q, want %q", index.GeneratedAt, want)
+	}
+	code, _, errOut = runProgram(t, "--changes-limit", "0")
+	if code != exitOK {
+		t.Fatalf("the program exits %d, want %d:\n%s", code, exitOK, errOut)
+	}
+	index = readIndex(t, filepath.Join(tr.dir, "docs"))
+	if index.GeneratedAt != want {
+		t.Errorf("the index says %q, want %q", index.GeneratedAt, want)
+	}
+}
+
+// TestTheIndexIsTheSameOnEveryRun checks that the build of the index
+// is reproducible.
+//
+// The publish job of the site commits only when the site changed, so
+// two builds of the same tree have to be the same bytes.
+func TestTheIndexIsTheSameOnEveryRun(t *testing.T) {
+	tr := newTree(t)
+	tr.templates()
+	tr.bundle("alice", "fix", siteWorkflow)
+	tr.init()
+	tr.commit("add the workflow")
+	t.Chdir(tr.dir)
+	code, _, errOut := runProgram(t)
+	if code != exitOK {
+		t.Fatalf("the program exits %d, want %d:\n%s", code, exitOK, errOut)
+	}
+	path := filepath.Join(tr.dir, "docs", "api", "index.json")
+	first := readFile(t, path)
+	code, _, errOut = runProgram(t)
+	if code != exitOK {
+		t.Fatalf("the program exits %d, want %d:\n%s", code, exitOK, errOut)
+	}
+	second := readFile(t, path)
+	if !bytes.Equal(first, second) {
+		t.Errorf("the index of the second run differs from the first:\n%s\n%s", first, second)
+	}
+}
+
+// TestTheNamespaceAPIIsRefused checks the namespace that takes the
+// path of the API.
+//
+// The machine-readable files of the site are served from "api", so a
+// namespace that takes the name would take their prefix.
+func TestTheNamespaceAPIIsRefused(t *testing.T) {
+	tr := newTree(t)
+	tr.bundle("api", "fix", siteWorkflow)
+	tr.templates()
+	tr.init()
+	t.Chdir(tr.dir)
+	code, _, errOut := runProgram(t)
+	if code != exitInvalid {
+		t.Errorf("the namespace %q exits %d, want %d:\n%s", "api", code, exitInvalid, errOut)
+	}
+	if !strings.Contains(errOut, "api") {
+		t.Errorf("the error does not name the namespace %q:\n%s", "api", errOut)
 	}
 }
 

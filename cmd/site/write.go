@@ -109,7 +109,8 @@ func copyFile(from, to string) error {
 // writeData writes the facts the site is built from.
 //
 // The data is JSON: the templates read it, and the data is what
-// another program would read too.
+// another program would read too. The files of the API are part of
+// the data: they are JSON the site serves as they are.
 func writeData(out string, data *siteData) error {
 	dir := filepath.Join(out, "_data")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -118,7 +119,38 @@ func writeData(out string, data *siteData) error {
 	if err := writeJSON(filepath.Join(dir, "workflows.json"), data.Records); err != nil {
 		return err
 	}
-	return writeJSON(filepath.Join(dir, "changes.json"), data.Changes)
+	if err := writeJSON(filepath.Join(dir, "changes.json"), data.Changes); err != nil {
+		return err
+	}
+	return writeAPI(out, data)
+}
+
+// writeAPI writes the machine-readable files of the site.
+//
+// The index lists every workflow, and every workflow has a file of its
+// own that holds its whole record. Jekyll copies the files it does
+// not build into the built site as they are, so the published site
+// serves them at the path they have here.
+func writeAPI(out string, data *siteData) error {
+	dir := filepath.Join(out, apiDir)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return &unreadableError{reason: fmt.Sprintf("%s: %v", dir, err)}
+	}
+	if err := writeJSON(filepath.Join(dir, "index.json"), data.API); err != nil {
+		return err
+	}
+	for _, rec := range data.Records {
+		// The file is written where the index says it is: the path
+		// of the file and the URL of the file are the same path.
+		path := filepath.Join(out, filepath.FromSlash(apiPath(rec.Address)))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return &unreadableError{reason: fmt.Sprintf("%s: %v", filepath.Dir(path), err)}
+		}
+		if err := writeJSON(path, rec); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // writeJSON writes a value as JSON.
