@@ -231,18 +231,25 @@ jobs:
 
 // TestTheKindOfAStep checks what a step becomes.
 //
-// A step is a message, a shell command, an action or a wait. A step
-// that is none of them has no kind.
+// A step is a message, a shell command, an action, a wait or a builtin
+// command. A step that is none of them has no kind.
 func TestTheKindOfAStep(t *testing.T) {
 	cases := []struct {
 		name string
 		step string
 		want string
+		cmd  string
 	}{
 		{name: "a message", step: "message: hello", want: "message"},
 		{name: "a shell command", step: "shell: ls", want: "shell"},
 		{name: "an action", step: "use: nightme-report", want: "use"},
 		{name: "a wait", step: "wait: 5m", want: "wait"},
+		{
+			name: "a builtin command",
+			step: "cmd:\n          name: skip",
+			want: "cmd",
+			cmd:  "skip",
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -255,6 +262,9 @@ func TestTheKindOfAStep(t *testing.T) {
 			record := recordOf(t, siteOf(t, bundles, noHistory), "alice/fix")
 			if got := record.Jobs[0].Steps[0].Kind; got != c.want {
 				t.Errorf("the step is a %q, want a %q", got, c.want)
+			}
+			if got := record.Jobs[0].Steps[0].Cmd; got != c.cmd {
+				t.Errorf("the step runs the builtin %q, want %q", got, c.cmd)
 			}
 		})
 	}

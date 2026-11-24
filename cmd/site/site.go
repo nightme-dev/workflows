@@ -123,9 +123,9 @@ type jobRecord struct {
 
 // stepRecord is one step of a job.
 //
-// The kind is what the step does: it says which of the four things a
-// step can be — a message, a shell command, an action, a wait — it
-// is. A step that is none of them has no kind.
+// The kind is what the step does: it says which of the five things a
+// step can be — a message, a shell command, an action, a wait, a
+// builtin command — it is. A step that is none of them has no kind.
 type stepRecord struct {
 	ID          string            `json:"id"`
 	Kind        string            `json:"kind"`
@@ -138,6 +138,7 @@ type stepRecord struct {
 	Use         string            `json:"use"`
 	With        map[string]any    `json:"with"`
 	Wait        string            `json:"wait"`
+	Cmd         string            `json:"cmd"`
 }
 
 // actionRecord is one script a bundle ships.
@@ -316,6 +317,7 @@ func stepsOf(steps []wfe.Step) []stepRecord {
 			Shell:       step.Shell,
 			Use:         step.Use,
 			Wait:        step.Wait,
+			Cmd:         cmdOf(step),
 			Env:         map[string]string{},
 			With:        map[string]any{},
 		}
@@ -332,7 +334,7 @@ func stepsOf(steps []wfe.Step) []stepRecord {
 
 // kindOf returns what a step does.
 //
-// The four kinds are the four things a step can be; a step that is
+// The five kinds are the five things a step can be; a step that is
 // none of them has no kind.
 func kindOf(step wfe.Step) string {
 	switch step.Kind() {
@@ -344,8 +346,22 @@ func kindOf(step wfe.Step) string {
 		return "use"
 	case wfe.StepKindWait:
 		return "wait"
+	case wfe.StepKindCmd:
+		return "cmd"
 	}
 	return ""
+}
+
+// cmdOf returns the builtin command a step runs.
+//
+// A step that runs no builtin names none: the name is empty. A cmd
+// step may carry a message as well — the message is what it does in
+// the chat — so the name is what tells the two apart.
+func cmdOf(step wfe.Step) string {
+	if step.Cmd == nil {
+		return ""
+	}
+	return step.Cmd.Name
 }
 
 // readBundles reads the bundles of the workflows directory.

@@ -1,5 +1,5 @@
-github.com/cnlangzi/nightme v0.9.2-0.20261121151556-2ba99e23c15d h1:D8geWq9pbXvcady3lMhTNqw/uU1y+p3hjCq/R93o3eI=
-github.com/cnlangzi/nightme v0.9.2-0.20261121151556-2ba99e23c15d/go.mod h1:DtWsKQtJ5mM1o6vNRWiRzjeJXLpI97LaewpqF75g3Gs=
+github.com/cnlangzi/nightme v0.9.3-0.20261123231844-2d88010d1713 h1:sIReaHCgVVi3oWb2zCDnvcQQr06wgNQFSVXxw9VNj74=
+github.com/cnlangzi/nightme v0.9.3-0.20261123231844-2d88010d1713/go.mod h1:DtWsKQtJ5mM1o6vNRWiRzjeJXLpI97LaewpqF75g3Gs=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405 h1:yhCVgyC4o1eVCa2tZl7eS0r+SDo693bJlVdllGtEeKM=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
