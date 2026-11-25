@@ -28,10 +28,10 @@
       "url": "https://nightme-dev.github.io/workflows/nightme/coder/",
       "detail": "https://nightme-dev.github.io/workflows/api/nightme/coder.json",
       "last_commit": {
-        "sha": "9188125",
+        "sha": "f2f8efb",
         "date": "2026-11-25",
-        "subject": "feat: 对齐 coder 流程与当前 gtw 契约 (#24)",
-        "url": "https://github.com/nightme-dev/workflows/commit/9188125"
+        "subject": "feat(coder): 路由 /gtw fix 的三种失败形状到对应处理 (#26)",
+        "url": "https://github.com/nightme-dev/workflows/commit/f2f8efb"
       }
     }
   ]
