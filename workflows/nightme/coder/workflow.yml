@@ -6,7 +6,7 @@ requires:
   nightme: ">0.9.2"
 jobs:
   ship:
-    iterations: 0                     # 0 = 一直跑
+    iterations: 1                     # 1 = 只跑一轮
     sleep: 5m                         # 两轮之间的退避
     steps:
       - id: fix
