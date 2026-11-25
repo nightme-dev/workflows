@@ -18,24 +18,17 @@ jobs:
           wake_after/candidates/held/blocked/branch_exists/pr_open 说得出为什么没挑到（等多久再来、看了几个候选、几个被别人占着、几个卡在依赖上、几个分支已经在了、几个 PR 已经开着）。
           400：没有 issue 号，或者没有工作区。
           404：这个 issue 不存在。
-          409：世界挡着——issue 被别的 agent 占了（label 是 nightme/wip）或者停在别的状态上（label 说是哪个状态）、分支已经在了、或者工作区已经在一次 /gtw fix 里。
-          工作区还留在上一个 fix 的 worktree 里时（就是"工作区已经在一次 /gtw fix 里"）：/gtw back 是 agent 能发的命令——直接调它把聊天带回主仓库，再 resume 本步。
-          500：worktree 建不出来；或者 worktree 好了而 issue 没送到 agent，事实里带着 issue/branch/worktree/mode；或者 agent 那一轮什么都没留下（changes=0，statusText 是 the agent left the worktree unchanged）。
-          agent 什么都没留下时：用 next 跳过本步，下一步的 continue 会把 agent 叫回来接着干。这一步不能重跑——分支和 worktree 已经在了，重跑会撞 409「分支已经在了」。
-          worktree 留在那儿时：这一轮到此为止，先把聊天带回主仓库（/gtw back）再收尾。
+          409：世界挡着——issue 被别的 agent 占了（label 是 nightme/wip）或者停在别的状态上、分支已经在了、或者工作区已经在一次 /gtw fix 里。工作区还留在上一个 fix 的 worktree 里时：/gtw back 是 agent 能发的命令——直接调它把聊天带回主仓库，再 resume 本步。
+          500：worktree 建不出来——这一轮到此为止。
           503：label 写不上去，或者认不出 git host。
           429：上游被限流——run 停下来等操作员，不要重跑这一步。
-          上游失败时结果带的是上游自己的状态码和消息（429 见上）：这一轮到此为止。
-          状态码 0：agent 那一轮没有干净结束（被取消、进程死了）——没有结论，事实里也不带 changes；这一轮到此为止。
+          这一轮 agent 没把活干完时，先看这一轮的结果（statusText 和事实）和 transcript（判断点的报告里带着 agent 说过的话），再按下面选：
+          · statusText 是 the worktree is ready but the issue did not reach the agent：agent 压根没拿到这个 issue。instruct 让它读 issue #（事实里的 issue 号）（gh issue view N 或 glab issue view N，看 origin 是哪个平台），按 issue 里的要求做。
+          · statusText 是上游的错，或者状态码 0：agent 拿到了 issue，这一轮中途死了。instruct 让它接着把这个 issue 做完。
+          · statusText 是 the agent left the worktree unchanged（changes=0）：agent 拿到了 issue，干完了却什么都没改。看它说了什么：说清楚了没什么要改——这一轮到此为止：/gtw back 回主仓库，然后 end_round 把这一轮结束（交回引擎）；什么都没说清楚——instruct 让它读 issue #（事实里的 issue 号），按 issue 里的要求做。
+          instruct 之后用 next 跳过本步（这一步不能重跑：分支和 worktree 已经在了，重跑会撞 409「分支已经在了」）；commit 那一步会提交 agent 做出来的东西。
+          instruct 之后 agent 还是没反应（聊天里没有可用的 agent session）：ask_human，让操作员处理。
           跳过本步之前先看有没有 issue 事实：没有 issue 事实时别用 next 跳过它——跳过了它，这一轮会接着走进没有 issue 的流水线，review、commit、push、pr 都会空转。
-      - id: fix-continue
-        message: continue
-        if: steps.fix.outputs.data.changes == 0
-        description: >
-          fix 报 500 且 agent 什么都没留下（changes=0）时，这一句 continue 递回 chat 里的 agent——
-          它还拿着这个 issue 的上下文，让它接着把活干完；干完之后 commit 那一步会把它提交掉。
-          200：agent 接着干完了（回合正常结束）。
-          这一步只在 changes=0 时跑：其余情形（没有 changes 这个键）它不跑。
       - id: idle
         cmd:
           name: skip
