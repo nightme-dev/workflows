@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated_at": "2026-11-24",
+  "generated_at": "2026-11-25",
   "count": 1,
   "namespaces": [
     "nightme"
@@ -28,10 +28,10 @@
       "url": "https://nightme-dev.github.io/workflows/nightme/coder/",
       "detail": "https://nightme-dev.github.io/workflows/api/nightme/coder.json",
       "last_commit": {
-        "sha": "5165a0f",
-        "date": "2026-11-24",
-        "subject": "docs(coder): 补充 review 409 状态与 commits=0 的说明 (#22)",
-        "url": "https://github.com/nightme-dev/workflows/commit/5165a0f"
+        "sha": "9188125",
+        "date": "2026-11-25",
+        "subject": "feat: 对齐 coder 流程与当前 gtw 契约 (#24)",
+        "url": "https://github.com/nightme-dev/workflows/commit/9188125"
       }
     }
   ]
